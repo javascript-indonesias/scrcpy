@@ -1,10 +1,21 @@
-# scrcpy (v1.9)
+# scrcpy (v1.10)
 
 This application provides display and control of Android devices connected on
 USB (or [over TCP/IP][article-tcpip]). It does not require any _root_ access.
 It works on _GNU/Linux_, _Windows_ and _macOS_.
 
 ![screenshot](assets/screenshot-debian-600.jpg)
+
+It focuses on:
+
+ - **lightness** (native, displays only the device screen)
+ - **performance** (30~60fps)
+ - **quality** (1920×1080 or above)
+ - **low latency** ([35~70ms][lowlatency])
+ - **low startup time** (~1 second to display the first image)
+ - **non-intrusiveness** (nothing is left installed on the device)
+
+[lowlatency]: https://github.com/Genymobile/scrcpy/pull/646
 
 
 ## Requirements
@@ -51,13 +62,13 @@ For Gentoo, an [Ebuild] is available: [`scrcpy/`][ebuild-link].
 For Windows, for simplicity, prebuilt archives with all the dependencies
 (including `adb`) are available:
 
- - [`scrcpy-win32-v1.9.zip`][direct-win32]  
-   _(SHA-256: 3234f7fbcc26b9e399f50b5ca9ed085708954c87fda1b0dd32719d6e7dd861ef)_
- - [`scrcpy-win64-v1.9.zip`][direct-win64]  
-   _(SHA-256: 0088eca1811ea7c7ac350d636c8465b266e6c830bb268770ff88fddbb493077e)_
+ - [`scrcpy-win32-v1.10.zip`][direct-win32]  
+   _(SHA-256: f98b400b3764404b33b212e9762dd6f1593ddb766c1480fc2609c94768e4a8e1)_
+ - [`scrcpy-win64-v1.10.zip`][direct-win64]  
+   _(SHA-256: 95de34575d873c7e95dfcfb5e74d0f6af4f70b2a5bc6fde0f48d1a05480e3a44)_
 
-[direct-win32]: https://github.com/Genymobile/scrcpy/releases/download/v1.9/scrcpy-win32-v1.9.zip
-[direct-win64]: https://github.com/Genymobile/scrcpy/releases/download/v1.9/scrcpy-win64-v1.9.zip
+[direct-win32]: https://github.com/Genymobile/scrcpy/releases/download/v1.10/scrcpy-win32-v1.10.zip
+[direct-win64]: https://github.com/Genymobile/scrcpy/releases/download/v1.10/scrcpy-win64-v1.10.zip
 
 You can also [build the app manually][BUILD].
 
@@ -251,6 +262,11 @@ _scrcpy_ window.
 
 There is no visual feedback, a log is printed to the console.
 
+The target directory can be changed on start:
+
+```bash
+scrcpy --push-target /sdcard/foo/bar/
+```
 
 ### Read-only
 
@@ -289,6 +305,14 @@ latency), use:
 scrcpy --render-expired-frames
 ```
 
+### Custom window title
+
+By default, the window title is the device model. It can be changed:
+
+```bash
+scrcpy --window-title 'My device'
+```
+
 
 ### Forward audio
 
@@ -302,26 +326,26 @@ Also see [issue #14].
 
 ## Shortcuts
 
- | Action                                 |   Shortcut                    |
- | -------------------------------------- |:----------------------------  |
- | Switch fullscreen mode                 | `Ctrl`+`f`                    |
- | Resize window to 1:1 (pixel-perfect)   | `Ctrl`+`g`                    |
- | Resize window to remove black borders  | `Ctrl`+`x` \| _Double-click¹_ |
- | Click on `HOME`                        | `Ctrl`+`h` \| _Middle-click_  |
- | Click on `BACK`                        | `Ctrl`+`b` \| _Right-click²_  |
- | Click on `APP_SWITCH`                  | `Ctrl`+`s`                    |
- | Click on `MENU`                        | `Ctrl`+`m`                    |
- | Click on `VOLUME_UP`                   | `Ctrl`+`↑` _(up)_   (`Cmd`+`↑` on macOS) |
- | Click on `VOLUME_DOWN`                 | `Ctrl`+`↓` _(down)_ (`Cmd`+`↓` on macOS) |
- | Click on `POWER`                       | `Ctrl`+`p`                    |
- | Power on                               | _Right-click²_                |
- | Turn device screen off (keep mirroring)| `Ctrl`+`o`                    |
- | Expand notification panel              | `Ctrl`+`n`                    |
- | Collapse notification panel            | `Ctrl`+`Shift`+`n`            |
- | Copy device clipboard to computer      | `Ctrl`+`c`                    |
- | Paste computer clipboard to device     | `Ctrl`+`v`                    |
- | Copy computer clipboard to device      | `Ctrl`+`Shift`+`v`            |
- | Enable/disable FPS counter (on stdout) | `Ctrl`+`i`                    |
+ | Action                                 |   Shortcut                    |   Shortcut (macOS)
+ | -------------------------------------- |:----------------------------- |:-----------------------------
+ | Switch fullscreen mode                 | `Ctrl`+`f`                    | `Cmd`+`f`
+ | Resize window to 1:1 (pixel-perfect)   | `Ctrl`+`g`                    | `Cmd`+`g`
+ | Resize window to remove black borders  | `Ctrl`+`x` \| _Double-click¹_ | `Cmd`+`x`  \| _Double-click¹_
+ | Click on `HOME`                        | `Ctrl`+`h` \| _Middle-click_  | `Ctrl`+`h` \| _Middle-click_
+ | Click on `BACK`                        | `Ctrl`+`b` \| _Right-click²_  | `Cmd`+`b`  \| _Right-click²_
+ | Click on `APP_SWITCH`                  | `Ctrl`+`s`                    | `Cmd`+`s`
+ | Click on `MENU`                        | `Ctrl`+`m`                    | `Ctrl`+`m`
+ | Click on `VOLUME_UP`                   | `Ctrl`+`↑` _(up)_             | `Cmd`+`↑` _(up)_
+ | Click on `VOLUME_DOWN`                 | `Ctrl`+`↓` _(down)_           | `Cmd`+`↓` _(down)_
+ | Click on `POWER`                       | `Ctrl`+`p`                    | `Cmd`+`p`
+ | Power on                               | _Right-click²_                | _Right-click²_
+ | Turn device screen off (keep mirroring)| `Ctrl`+`o`                    | `Cmd`+`o`
+ | Expand notification panel              | `Ctrl`+`n`                    | `Cmd`+`n`
+ | Collapse notification panel            | `Ctrl`+`Shift`+`n`            | `Cmd`+`Shift`+`n`
+ | Copy device clipboard to computer      | `Ctrl`+`c`                    | `Cmd`+`c`
+ | Paste computer clipboard to device     | `Ctrl`+`v`                    | `Cmd`+`v`
+ | Copy computer clipboard to device      | `Ctrl`+`Shift`+`v`            | `Cmd`+`Shift`+`v`
+ | Enable/disable FPS counter (on stdout) | `Ctrl`+`i`                    | `Cmd`+`i`
 
 _¹Double-click on black borders to remove them._  
 _²Right-click turns the screen on if it was off, presses BACK otherwise._
