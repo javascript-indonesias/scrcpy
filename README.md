@@ -37,8 +37,11 @@ control it using keyboard and mouse.
 
 ### Linux
 
-On Linux, you typically need to [build the app manually][BUILD]. Don't worry,
-it's not that hard.
+In Debian (_testing_ and _sid_ for now):
+
+```
+apt install scrcpy
+```
 
 A [Snap] package is available: [`scrcpy`][snap-link].
 
@@ -55,6 +58,10 @@ For Gentoo, an [Ebuild] is available: [`scrcpy/`][ebuild-link].
 
 [Ebuild]: https://wiki.gentoo.org/wiki/Ebuild
 [ebuild-link]: https://github.com/maggu2810/maggu2810-overlay/tree/master/app-mobilephone/scrcpy
+
+You could also [build the app manually][BUILD] (don't worry, it's not that
+hard).
+
 
 
 ### Windows
@@ -489,7 +496,7 @@ Read the [developers page].
 ## Licence
 
     Copyright (C) 2018 Genymobile
-    Copyright (C) 2018-2019 Romain Vimont
+    Copyright (C) 2018-2020 Romain Vimont
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
