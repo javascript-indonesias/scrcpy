@@ -66,16 +66,31 @@ hard).
 
 ### Windows
 
-For Windows, for simplicity, prebuilt archives with all the dependencies
-(including `adb`) are available:
+For Windows, for simplicity, a prebuilt archive with all the dependencies
+(including `adb`) is available:
 
- - [`scrcpy-win32-v1.12.1.zip`][direct-win32]  
-   _(SHA-256: 0f4b3b063536b50a2df05dc42c760f9cc0093a9a26dbdf02d8232c74dab43480)_
  - [`scrcpy-win64-v1.12.1.zip`][direct-win64]  
    _(SHA-256: 57d34b6d16cfd9fe169bc37c4df58ebd256d05c1ea3febc63d9cb0a027ab47c9)_
 
-[direct-win32]: https://github.com/Genymobile/scrcpy/releases/download/v1.12.1/scrcpy-win32-v1.12.1.zip
 [direct-win64]: https://github.com/Genymobile/scrcpy/releases/download/v1.12.1/scrcpy-win64-v1.12.1.zip
+
+It is also available in [Chocolatey]:
+
+[Chocolatey]: https://chocolatey.org/
+
+```bash
+choco install scrcpy
+choco install adb    # if you don't have it yet
+```
+
+And in [Scoop]:
+
+```bash
+scoop install scrcpy
+scoop install adb    # if you don't have it yet
+```
+
+[Scoop]: https://scoop.sh
 
 You can also [build the app manually][BUILD].
 
