@@ -1,5 +1,6 @@
 #include "cli.h"
 
+#include <assert.h>
 #include <getopt.h>
 #include <stdint.h>
 #include <unistd.h>
@@ -35,15 +36,31 @@ scrcpy_print_usage(const char *arg0) {
         "        (typically, portrait for a phone, landscape for a tablet).\n"
         "        Any --max-size value is computed on the cropped size.\n"
         "\n"
+        "    --display id\n"
+        "        Specify the display id to mirror.\n"
+        "\n"
+        "        The list of possible display ids can be listed by:\n"
+        "            adb shell dumpsys display\n"
+        "        (search \"mDisplayId=\" in the output)\n"
+        "\n"
+        "        Default is 0.\n"
+        "\n"
         "    -f, --fullscreen\n"
         "        Start in fullscreen.\n"
         "\n"
         "    -h, --help\n"
         "        Print this help.\n"
         "\n"
+        "    --lock-video-orientation value\n"
+        "        Lock video orientation to value.\n"
+        "        Possible values are -1 (unlocked), 0, 1, 2 and 3.\n"
+        "        Natural device orientation is 0, and each increment adds a\n"
+        "        90 degrees rotation counterclockwise.\n"
+        "        Default is %d%s.\n"
+        "\n"
         "    --max-fps value\n"
-        "        Limit the frame rate of screen capture (only supported on\n"
-        "        devices with Android >= 10).\n"
+        "        Limit the frame rate of screen capture (officially supported\n"
+        "        since Android 10, but may work on earlier versions).\n"
         "\n"
         "    -m, --max-size value\n"
         "        Limit both the width and height of the video to value. The\n"
@@ -58,9 +75,14 @@ scrcpy_print_usage(const char *arg0) {
         "        Do not display device (only when screen recording is\n"
         "        enabled).\n"
         "\n"
-        "    -p, --port port\n"
-        "        Set the TCP port the client listens on.\n"
-        "        Default is %d.\n"
+        "    --no-mipmaps\n"
+        "        If the renderer is OpenGL 3.0+ or OpenGL ES 2.0+, then\n"
+        "        mipmaps are automatically generated to improve downscaling\n"
+        "        quality. This option disables the generation of mipmaps.\n"
+        "\n"
+        "    -p, --port port[:port]\n"
+        "        Set the TCP port (range) used by the client to listen.\n"
+        "        Default is %d:%d.\n"
         "\n"
         "    --prefer-text\n"
         "        Inject alpha characters and space as text events instead of\n"
@@ -82,11 +104,23 @@ scrcpy_print_usage(const char *arg0) {
         "    --record-format format\n"
         "        Force recording format (either mp4 or mkv).\n"
         "\n"
+        "    --render-driver name\n"
+        "        Request SDL to use the given render driver (this is just a\n"
+        "        hint).\n"
+        "        Supported names are currently \"direct3d\", \"opengl\",\n"
+        "        \"opengles2\", \"opengles\", \"metal\" and \"software\".\n"
+        "        <https://wiki.libsdl.org/SDL_HINT_RENDER_DRIVER>\n"
+        "\n"
         "    --render-expired-frames\n"
         "        By default, to minimize latency, scrcpy always renders the\n"
         "        last available decoded frame, and drops any previous ones.\n"
         "        This flag forces to render all frames, at a cost of a\n"
         "        possible increased latency.\n"
+        "\n"
+        "    --rotation value\n"
+        "        Set the initial display rotation.\n"
+        "        Possibles values are 0, 1, 2 and 3. Each increment adds a 90\n"
+        "        degrees rotation counterclockwise.\n"
         "\n"
         "    -s, --serial serial\n"
         "        The device serial number. Mandatory only if several devices\n"
@@ -110,11 +144,11 @@ scrcpy_print_usage(const char *arg0) {
         "\n"
         "    --window-x value\n"
         "        Set the initial window horizontal position.\n"
-        "        Default is -1 (automatic).\n"
+        "        Default is \"auto\".\n"
         "\n"
         "    --window-y value\n"
         "        Set the initial window vertical position.\n"
-        "        Default is -1 (automatic).\n"
+        "        Default is \"auto\".\n"
         "\n"
         "    --window-width value\n"
         "        Set the initial window width.\n"
@@ -127,73 +161,80 @@ scrcpy_print_usage(const char *arg0) {
         "Shortcuts:\n"
         "\n"
         "    " CTRL_OR_CMD "+f\n"
-        "        switch fullscreen mode\n"
+        "        Switch fullscreen mode\n"
+        "\n"
+        "    " CTRL_OR_CMD "+Left\n"
+        "        Rotate display left\n"
+        "\n"
+        "    " CTRL_OR_CMD "+Right\n"
+        "        Rotate display right\n"
         "\n"
         "    " CTRL_OR_CMD "+g\n"
-        "        resize window to 1:1 (pixel-perfect)\n"
+        "        Resize window to 1:1 (pixel-perfect)\n"
         "\n"
         "    " CTRL_OR_CMD "+x\n"
         "    Double-click on black borders\n"
-        "        resize window to remove black borders\n"
+        "        Resize window to remove black borders\n"
         "\n"
         "    Ctrl+h\n"
         "    Middle-click\n"
-        "        click on HOME\n"
+        "        Click on HOME\n"
         "\n"
         "    " CTRL_OR_CMD "+b\n"
         "    " CTRL_OR_CMD "+Backspace\n"
         "    Right-click (when screen is on)\n"
-        "        click on BACK\n"
+        "        Click on BACK\n"
         "\n"
         "    " CTRL_OR_CMD "+s\n"
-        "        click on APP_SWITCH\n"
+        "        Click on APP_SWITCH\n"
         "\n"
         "    Ctrl+m\n"
-        "        click on MENU\n"
+        "        Click on MENU\n"
         "\n"
         "    " CTRL_OR_CMD "+Up\n"
-        "        click on VOLUME_UP\n"
+        "        Click on VOLUME_UP\n"
         "\n"
         "    " CTRL_OR_CMD "+Down\n"
-        "        click on VOLUME_DOWN\n"
+        "        Click on VOLUME_DOWN\n"
         "\n"
         "    " CTRL_OR_CMD "+p\n"
-        "        click on POWER (turn screen on/off)\n"
+        "        Click on POWER (turn screen on/off)\n"
         "\n"
         "    Right-click (when screen is off)\n"
-        "        power on\n"
+        "        Power on\n"
         "\n"
         "    " CTRL_OR_CMD "+o\n"
-        "        turn device screen off (keep mirroring)\n"
+        "        Turn device screen off (keep mirroring)\n"
         "\n"
         "    " CTRL_OR_CMD "+r\n"
-        "        rotate device screen\n"
+        "        Rotate device screen\n"
         "\n"
         "    " CTRL_OR_CMD "+n\n"
-        "       expand notification panel\n"
+        "        Expand notification panel\n"
         "\n"
         "    " CTRL_OR_CMD "+Shift+n\n"
-        "       collapse notification panel\n"
+        "        Collapse notification panel\n"
         "\n"
         "    " CTRL_OR_CMD "+c\n"
-        "        copy device clipboard to computer\n"
+        "        Copy device clipboard to computer\n"
         "\n"
         "    " CTRL_OR_CMD "+v\n"
-        "        paste computer clipboard to device\n"
+        "        Paste computer clipboard to device\n"
         "\n"
         "    " CTRL_OR_CMD "+Shift+v\n"
-        "        copy computer clipboard to device\n"
+        "        Copy computer clipboard to device\n"
         "\n"
         "    " CTRL_OR_CMD "+i\n"
-        "        enable/disable FPS counter (print frames/second in logs)\n"
+        "        Enable/disable FPS counter (print frames/second in logs)\n"
         "\n"
         "    Drag & drop APK file\n"
-        "        install APK from computer\n"
+        "        Install APK from computer\n"
         "\n",
         arg0,
         DEFAULT_BIT_RATE,
+        DEFAULT_LOCK_VIDEO_ORIENTATION, DEFAULT_LOCK_VIDEO_ORIENTATION >= 0 ? "" : " (unlocked)",
         DEFAULT_MAX_SIZE, DEFAULT_MAX_SIZE ? "" : " (unlimited)",
-        DEFAULT_LOCAL_PORT);
+        DEFAULT_LOCAL_PORT_RANGE_FIRST, DEFAULT_LOCAL_PORT_RANGE_LAST);
 }
 
 static bool
@@ -219,6 +260,27 @@ parse_integer_arg(const char *s, long *out, bool accept_suffix, long min,
 
     *out = value;
     return true;
+}
+
+static size_t
+parse_integers_arg(const char *s, size_t max_items, long *out, long min,
+                   long max, const char *name) {
+    size_t count = parse_integers(s, ':', max_items, out);
+    if (!count) {
+        LOGE("Could not parse %s: %s", name, s);
+        return 0;
+    }
+
+    for (size_t i = 0; i < count; ++i) {
+        long value = out[i];
+        if (value < min || value > max) {
+            LOGE("Could not parse %s: value (%ld) out-of-range (%ld; %ld)",
+                 name, value, min, max);
+            return 0;
+        }
+    }
+
+    return count;
 }
 
 static bool
@@ -260,9 +322,42 @@ parse_max_fps(const char *s, uint16_t *max_fps) {
 }
 
 static bool
-parse_window_position(const char *s, int16_t *position) {
+parse_lock_video_orientation(const char *s, int8_t *lock_video_orientation) {
     long value;
-    bool ok = parse_integer_arg(s, &value, false, -1, 0x7FFF,
+    bool ok = parse_integer_arg(s, &value, false, -1, 3,
+                                "lock video orientation");
+    if (!ok) {
+        return false;
+    }
+
+    *lock_video_orientation = (int8_t) value;
+    return true;
+}
+
+static bool
+parse_rotation(const char *s, uint8_t *rotation) {
+    long value;
+    bool ok = parse_integer_arg(s, &value, false, 0, 3, "rotation");
+    if (!ok) {
+        return false;
+    }
+
+    *rotation = (uint8_t) value;
+    return true;
+}
+
+static bool
+parse_window_position(const char *s, int16_t *position) {
+    // special value for "auto"
+    static_assert(WINDOW_POSITION_UNDEFINED == -0x8000, "unexpected value");
+
+    if (!strcmp(s, "auto")) {
+        *position = WINDOW_POSITION_UNDEFINED;
+        return true;
+    }
+
+    long value;
+    bool ok = parse_integer_arg(s, &value, false, -0x7FFF, 0x7FFF,
                                 "window position");
     if (!ok) {
         return false;
@@ -286,14 +381,42 @@ parse_window_dimension(const char *s, uint16_t *dimension) {
 }
 
 static bool
-parse_port(const char *s, uint16_t *port) {
+parse_port_range(const char *s, struct port_range *port_range) {
+    long values[2];
+    size_t count = parse_integers_arg(s, 2, values, 0, 0xFFFF, "port");
+    if (!count) {
+        return false;
+    }
+
+    uint16_t v0 = (uint16_t) values[0];
+    if (count == 1) {
+        port_range->first = v0;
+        port_range->last = v0;
+        return true;
+    }
+
+    assert(count == 2);
+    uint16_t v1 = (uint16_t) values[1];
+    if (v0 < v1) {
+        port_range->first = v0;
+        port_range->last = v1;
+    } else {
+        port_range->first = v1;
+        port_range->last = v0;
+    }
+
+    return true;
+}
+
+static bool
+parse_display_id(const char *s, uint16_t *display_id) {
     long value;
-    bool ok = parse_integer_arg(s, &value, false, 0, 0xFFFF, "port");
+    bool ok = parse_integer_arg(s, &value, false, 0, 0xFFFF, "display id");
     if (!ok) {
         return false;
     }
 
-    *port = (uint16_t) value;
+    *display_id = (uint16_t) value;
     return true;
 }
 
@@ -327,51 +450,62 @@ guess_record_format(const char *filename) {
     return 0;
 }
 
-#define OPT_RENDER_EXPIRED_FRAMES 1000
-#define OPT_WINDOW_TITLE          1001
-#define OPT_PUSH_TARGET           1002
-#define OPT_ALWAYS_ON_TOP         1003
-#define OPT_CROP                  1004
-#define OPT_RECORD_FORMAT         1005
-#define OPT_PREFER_TEXT           1006
-#define OPT_WINDOW_X              1007
-#define OPT_WINDOW_Y              1008
-#define OPT_WINDOW_WIDTH          1009
-#define OPT_WINDOW_HEIGHT         1010
-#define OPT_WINDOW_BORDERLESS     1011
-#define OPT_MAX_FPS               1012
+#define OPT_RENDER_EXPIRED_FRAMES  1000
+#define OPT_WINDOW_TITLE           1001
+#define OPT_PUSH_TARGET            1002
+#define OPT_ALWAYS_ON_TOP          1003
+#define OPT_CROP                   1004
+#define OPT_RECORD_FORMAT          1005
+#define OPT_PREFER_TEXT            1006
+#define OPT_WINDOW_X               1007
+#define OPT_WINDOW_Y               1008
+#define OPT_WINDOW_WIDTH           1009
+#define OPT_WINDOW_HEIGHT          1010
+#define OPT_WINDOW_BORDERLESS      1011
+#define OPT_MAX_FPS                1012
+#define OPT_LOCK_VIDEO_ORIENTATION 1013
+#define OPT_DISPLAY_ID             1014
+#define OPT_ROTATION               1015
+#define OPT_RENDER_DRIVER          1016
+#define OPT_NO_MIPMAPS             1017
 
 bool
 scrcpy_parse_args(struct scrcpy_cli_args *args, int argc, char *argv[]) {
     static const struct option long_options[] = {
-        {"always-on-top",         no_argument,       NULL, OPT_ALWAYS_ON_TOP},
-        {"bit-rate",              required_argument, NULL, 'b'},
-        {"crop",                  required_argument, NULL, OPT_CROP},
-        {"fullscreen",            no_argument,       NULL, 'f'},
-        {"help",                  no_argument,       NULL, 'h'},
-        {"max-fps",               required_argument, NULL, OPT_MAX_FPS},
-        {"max-size",              required_argument, NULL, 'm'},
-        {"no-control",            no_argument,       NULL, 'n'},
-        {"no-display",            no_argument,       NULL, 'N'},
-        {"port",                  required_argument, NULL, 'p'},
-        {"push-target",           required_argument, NULL, OPT_PUSH_TARGET},
-        {"record",                required_argument, NULL, 'r'},
-        {"record-format",         required_argument, NULL, OPT_RECORD_FORMAT},
-        {"render-expired-frames", no_argument,       NULL,
-                                                     OPT_RENDER_EXPIRED_FRAMES},
-        {"serial",                required_argument, NULL, 's'},
-        {"show-touches",          no_argument,       NULL, 't'},
-        {"turn-screen-off",       no_argument,       NULL, 'S'},
-        {"prefer-text",           no_argument,       NULL, OPT_PREFER_TEXT},
-        {"version",               no_argument,       NULL, 'v'},
-        {"window-title",          required_argument, NULL, OPT_WINDOW_TITLE},
-        {"window-x",              required_argument, NULL, OPT_WINDOW_X},
-        {"window-y",              required_argument, NULL, OPT_WINDOW_Y},
-        {"window-width",          required_argument, NULL, OPT_WINDOW_WIDTH},
-        {"window-height",         required_argument, NULL, OPT_WINDOW_HEIGHT},
-        {"window-borderless",     no_argument,       NULL,
-                                                     OPT_WINDOW_BORDERLESS},
-        {NULL,                    0,                 NULL, 0  },
+        {"always-on-top",          no_argument,       NULL, OPT_ALWAYS_ON_TOP},
+        {"bit-rate",               required_argument, NULL, 'b'},
+        {"crop",                   required_argument, NULL, OPT_CROP},
+        {"display",                required_argument, NULL, OPT_DISPLAY_ID},
+        {"fullscreen",             no_argument,       NULL, 'f'},
+        {"help",                   no_argument,       NULL, 'h'},
+        {"lock-video-orientation", required_argument, NULL,
+                                                  OPT_LOCK_VIDEO_ORIENTATION},
+        {"max-fps",                required_argument, NULL, OPT_MAX_FPS},
+        {"max-size",               required_argument, NULL, 'm'},
+        {"no-control",             no_argument,       NULL, 'n'},
+        {"no-display",             no_argument,       NULL, 'N'},
+        {"no-mipmaps",             no_argument,       NULL, OPT_NO_MIPMAPS},
+        {"port",                   required_argument, NULL, 'p'},
+        {"push-target",            required_argument, NULL, OPT_PUSH_TARGET},
+        {"record",                 required_argument, NULL, 'r'},
+        {"record-format",          required_argument, NULL, OPT_RECORD_FORMAT},
+        {"render-driver",          required_argument, NULL, OPT_RENDER_DRIVER},
+        {"render-expired-frames",  no_argument,       NULL,
+                                                  OPT_RENDER_EXPIRED_FRAMES},
+        {"rotation",               required_argument, NULL, OPT_ROTATION},
+        {"serial",                 required_argument, NULL, 's'},
+        {"show-touches",           no_argument,       NULL, 't'},
+        {"turn-screen-off",        no_argument,       NULL, 'S'},
+        {"prefer-text",            no_argument,       NULL, OPT_PREFER_TEXT},
+        {"version",                no_argument,       NULL, 'v'},
+        {"window-title",           required_argument, NULL, OPT_WINDOW_TITLE},
+        {"window-x",               required_argument, NULL, OPT_WINDOW_X},
+        {"window-y",               required_argument, NULL, OPT_WINDOW_Y},
+        {"window-width",           required_argument, NULL, OPT_WINDOW_WIDTH},
+        {"window-height",          required_argument, NULL, OPT_WINDOW_HEIGHT},
+        {"window-borderless",      no_argument,       NULL,
+                                                  OPT_WINDOW_BORDERLESS},
+        {NULL,                     0,                 NULL, 0  },
     };
 
     struct scrcpy_options *opts = &args->opts;
@@ -392,6 +526,11 @@ scrcpy_parse_args(struct scrcpy_cli_args *args, int argc, char *argv[]) {
                 // fall through
             case OPT_CROP:
                 opts->crop = optarg;
+                break;
+            case OPT_DISPLAY_ID:
+                if (!parse_display_id(optarg, &opts->display_id)) {
+                    return false;
+                }
                 break;
             case 'f':
                 opts->fullscreen = true;
@@ -417,6 +556,11 @@ scrcpy_parse_args(struct scrcpy_cli_args *args, int argc, char *argv[]) {
                     return false;
                 }
                 break;
+            case OPT_LOCK_VIDEO_ORIENTATION:
+                if (!parse_lock_video_orientation(optarg, &opts->lock_video_orientation)) {
+                    return false;
+                }
+                break;
             case 'n':
                 opts->control = false;
                 break;
@@ -424,7 +568,7 @@ scrcpy_parse_args(struct scrcpy_cli_args *args, int argc, char *argv[]) {
                 opts->display = false;
                 break;
             case 'p':
-                if (!parse_port(optarg, &opts->port)) {
+                if (!parse_port_range(optarg, &opts->port_range)) {
                     return false;
                 }
                 break;
@@ -484,6 +628,17 @@ scrcpy_parse_args(struct scrcpy_cli_args *args, int argc, char *argv[]) {
             case OPT_PREFER_TEXT:
                 opts->prefer_text = true;
                 break;
+            case OPT_ROTATION:
+                if (!parse_rotation(optarg, &opts->rotation)) {
+                    return false;
+                }
+                break;
+            case OPT_RENDER_DRIVER:
+                opts->render_driver = optarg;
+                break;
+            case OPT_NO_MIPMAPS:
+                opts->mipmaps = false;
+                break;
             default:
                 // getopt prints the error message on stderr
                 return false;
@@ -492,11 +647,6 @@ scrcpy_parse_args(struct scrcpy_cli_args *args, int argc, char *argv[]) {
 
     if (!opts->display && !opts->record_filename) {
         LOGE("-N/--no-display requires screen recording (-r/--record)");
-        return false;
-    }
-
-    if (!opts->display && opts->fullscreen) {
-        LOGE("-f/--fullscreen-window is incompatible with -N/--no-display");
         return false;
     }
 
