@@ -21,13 +21,16 @@ struct screen {
     struct sc_opengl gl;
     struct size frame_size;
     struct size content_size; // rotated frame_size
-    // The window size the last time it was not maximized or fullscreen.
-    struct size windowed_window_size;
-    // Since we receive the event SIZE_CHANGED before MAXIMIZED, we must be
-    // able to revert the size to its non-maximized value.
-    struct size windowed_window_size_backup;
+
+    bool resize_pending; // resize requested while fullscreen or maximized
+    // The content size the last time the window was not maximized or
+    // fullscreen (meaningful only when resize_pending is true)
+    struct size windowed_content_size;
+
     // client rotation: 0, 1, 2 or 3 (x90 degrees counterclockwise)
     unsigned rotation;
+    // rectangle of the content (excluding black borders)
+    struct SDL_Rect rect;
     bool has_frame;
     bool fullscreen;
     bool maximized;
@@ -49,15 +52,18 @@ struct screen {
         .width = 0, \
         .height = 0, \
     }, \
-    .windowed_window_size = { \
-        .width = 0, \
-        .height = 0, \
-    }, \
-    .windowed_window_size_backup = { \
+    .resize_pending = false, \
+    .windowed_content_size = { \
         .width = 0, \
         .height = 0, \
     }, \
     .rotation = 0, \
+    .rect = { \
+        .x = 0, \
+        .y = 0, \
+        .w = 0, \
+        .h = 0, \
+    }, \
     .has_frame = false, \
     .fullscreen = false, \
     .maximized = false, \
@@ -91,8 +97,11 @@ bool
 screen_update_frame(struct screen *screen, struct video_buffer *vb);
 
 // render the texture to the renderer
+//
+// Set the update_content_rect flag if the window or content size may have
+// changed, so that the content rectangle is recomputed
 void
-screen_render(struct screen *screen);
+screen_render(struct screen *screen, bool update_content_rect);
 
 // switch the fullscreen mode
 void
@@ -118,5 +127,12 @@ screen_handle_window_event(struct screen *screen, const SDL_WindowEvent *event);
 // x and y are expressed in pixels
 struct point
 screen_convert_to_frame_coords(struct screen *screen, int32_t x, int32_t y);
+
+// Convert coordinates from window to drawable.
+// Events are expressed in window coordinates, but content is expressed in
+// drawable coordinates. They are the same if HiDPI scaling is 1, but differ
+// otherwise.
+void
+screen_hidpi_scale_coords(struct screen *screen, int32_t *x, int32_t *y);
 
 #endif

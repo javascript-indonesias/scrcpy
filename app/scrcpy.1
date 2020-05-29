@@ -26,6 +26,16 @@ Encode the video at the given bit\-rate, expressed in bits/s. Unit suffixes are 
 Default is 8000000.
 
 .TP
+.BI "\-\-codec\-options " key[:type]=value[,...]
+Set a list of comma-separated key:type=value options for the device encoder.
+
+The possible values for 'type' are 'int' (default), 'long', 'float' and 'string'.
+
+The list of possible codec options is available in the Android documentation
+.UR https://d.android.com/reference/android/media/MediaFormat
+.UE .
+
+.TP
 .BI "\-\-crop " width\fR:\fIheight\fR:\fIx\fR:\fIy
 Crop the device screen on the server.
 
@@ -41,6 +51,10 @@ The list of possible display ids can be listed by "adb shell dumpsys display"
 (search "mDisplayId=" in the output).
 
 Default is 0.
+
+.TP
+.B \-\-force\-adb\-forward
+Do not attempt to use "adb reverse" to connect to the device.
 
 .TP
 .B \-f, \-\-fullscreen
@@ -115,6 +129,7 @@ Force recording format (either mp4 or mkv).
 Request SDL to use the given render driver (this is just a hint).
 
 Supported names are currently "direct3d", "opengl", "opengles2", "opengles", "metal" and "software".
+
 .UR https://wiki.libsdl.org/SDL_HINT_RENDER_DRIVER
 .UE
 
@@ -136,13 +151,23 @@ Turn the device screen off immediately.
 
 .TP
 .B \-t, \-\-show\-touches
-Enable "show touches" on start, disable on quit.
+Enable "show touches" on start, restore the initial value on exit.
 
 It only shows physical touches (not clicks from scrcpy).
 
 .TP
 .B \-v, \-\-version
 Print the version of scrcpy.
+
+.TP
+.BI "\-V, \-\-verbosity " value
+Set the log level ("debug", "info", "warn" or "error").
+
+Default is "info" for release builds, "debug" for debug builds.
+
+.TP
+.B \-w, \-\-stay-awake
+Keep the device on while scrcpy is running, when the device is plugged in.
 
 .TP
 .B \-\-window\-borderless
@@ -235,6 +260,10 @@ Turn screen on
 Turn device screen off (keep mirroring)
 
 .TP
+.B Ctrl+Shift+o
+Turn device screen on
+
+.TP
 .B Ctrl+r
 Rotate device screen
 
@@ -256,7 +285,7 @@ Paste computer clipboard to device
 
 .TP
 .B Ctrl+Shift+v
-Copy computer clipboard to device
+Copy computer clipboard to device (and paste if the device runs Android >= 7)
 
 .TP
 .B Ctrl+i

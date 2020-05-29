@@ -1,15 +1,18 @@
 package com.genymobile.scrcpy;
 
+import com.genymobile.scrcpy.wrappers.ContentProvider;
+
 import android.graphics.Rect;
 import android.media.MediaCodec;
+import android.os.BatteryManager;
 import android.os.Build;
 
-import java.io.File;
 import java.io.IOException;
+import java.util.List;
+import java.util.Locale;
 
 public final class Server {
 
-    private static final String SERVER_PATH = "/data/local/tmp/scrcpy-server.jar";
 
     private Server() {
         // not instantiable
@@ -18,16 +21,54 @@ public final class Server {
     private static void scrcpy(Options options) throws IOException {
         Ln.i("Device: " + Build.MANUFACTURER + " " + Build.MODEL + " (Android " + Build.VERSION.RELEASE + ")");
         final Device device = new Device(options);
+        List<CodecOption> codecOptions = CodecOption.parse(options.getCodecOptions());
+
+        boolean mustDisableShowTouchesOnCleanUp = false;
+        int restoreStayOn = -1;
+        if (options.getShowTouches() || options.getStayAwake()) {
+            try (ContentProvider settings = device.createSettingsProvider()) {
+                if (options.getShowTouches()) {
+                    String oldValue = settings.getAndPutValue(ContentProvider.TABLE_SYSTEM, "show_touches", "1");
+                    // If "show touches" was disabled, it must be disabled back on clean up
+                    mustDisableShowTouchesOnCleanUp = !"1".equals(oldValue);
+                }
+
+                if (options.getStayAwake()) {
+                    int stayOn = BatteryManager.BATTERY_PLUGGED_AC | BatteryManager.BATTERY_PLUGGED_USB | BatteryManager.BATTERY_PLUGGED_WIRELESS;
+                    String oldValue = settings.getAndPutValue(ContentProvider.TABLE_GLOBAL, "stay_on_while_plugged_in", String.valueOf(stayOn));
+                    try {
+                        restoreStayOn = Integer.parseInt(oldValue);
+                        if (restoreStayOn == stayOn) {
+                            // No need to restore
+                            restoreStayOn = -1;
+                        }
+                    } catch (NumberFormatException e) {
+                        restoreStayOn = 0;
+                    }
+                }
+            }
+        }
+
+        CleanUp.configure(mustDisableShowTouchesOnCleanUp, restoreStayOn);
+
         boolean tunnelForward = options.isTunnelForward();
+
         try (DesktopConnection connection = DesktopConnection.open(device, tunnelForward)) {
-            ScreenEncoder screenEncoder = new ScreenEncoder(options.getSendFrameMeta(), options.getBitRate(), options.getMaxFps());
+            ScreenEncoder screenEncoder = new ScreenEncoder(options.getSendFrameMeta(), options.getBitRate(), options.getMaxFps(), codecOptions);
 
             if (options.getControl()) {
-                Controller controller = new Controller(device, connection);
+                final Controller controller = new Controller(device, connection);
 
                 // asynchronous
                 startController(controller);
                 startDeviceMessageSender(controller.getSender());
+
+                device.setClipboardListener(new Device.ClipboardListener() {
+                    @Override
+                    public void onClipboardTextChanged(String text) {
+                        controller.getSender().pushClipboardText(text);
+                    }
+                });
             }
 
             try {
@@ -79,39 +120,52 @@ public final class Server {
                     "The server version (" + BuildConfig.VERSION_NAME + ") does not match the client " + "(" + clientVersion + ")");
         }
 
-        if (args.length != 10) {
-            throw new IllegalArgumentException("Expecting 10 parameters");
+        final int expectedParameters = 14;
+        if (args.length != expectedParameters) {
+            throw new IllegalArgumentException("Expecting " + expectedParameters + " parameters");
         }
 
         Options options = new Options();
 
-        int maxSize = Integer.parseInt(args[1]) & ~7; // multiple of 8
+        Ln.Level level = Ln.Level.valueOf(args[1].toUpperCase(Locale.ENGLISH));
+        options.setLogLevel(level);
+
+        int maxSize = Integer.parseInt(args[2]) & ~7; // multiple of 8
         options.setMaxSize(maxSize);
 
-        int bitRate = Integer.parseInt(args[2]);
+        int bitRate = Integer.parseInt(args[3]);
         options.setBitRate(bitRate);
 
-        int maxFps = Integer.parseInt(args[3]);
+        int maxFps = Integer.parseInt(args[4]);
         options.setMaxFps(maxFps);
 
-        int lockedVideoOrientation = Integer.parseInt(args[4]);
+        int lockedVideoOrientation = Integer.parseInt(args[5]);
         options.setLockedVideoOrientation(lockedVideoOrientation);
 
         // use "adb forward" instead of "adb tunnel"? (so the server must listen)
-        boolean tunnelForward = Boolean.parseBoolean(args[5]);
+        boolean tunnelForward = Boolean.parseBoolean(args[6]);
         options.setTunnelForward(tunnelForward);
 
-        Rect crop = parseCrop(args[6]);
+        Rect crop = parseCrop(args[7]);
         options.setCrop(crop);
 
-        boolean sendFrameMeta = Boolean.parseBoolean(args[7]);
+        boolean sendFrameMeta = Boolean.parseBoolean(args[8]);
         options.setSendFrameMeta(sendFrameMeta);
 
-        boolean control = Boolean.parseBoolean(args[8]);
+        boolean control = Boolean.parseBoolean(args[9]);
         options.setControl(control);
 
-        int displayId = Integer.parseInt(args[9]);
+        int displayId = Integer.parseInt(args[10]);
         options.setDisplayId(displayId);
+
+        boolean showTouches = Boolean.parseBoolean(args[11]);
+        options.setShowTouches(showTouches);
+
+        boolean stayAwake = Boolean.parseBoolean(args[12]);
+        options.setStayAwake(stayAwake);
+
+        String codecOptions = args[13];
+        options.setCodecOptions(codecOptions);
 
         return options;
     }
@@ -130,14 +184,6 @@ public final class Server {
         int x = Integer.parseInt(tokens[2]);
         int y = Integer.parseInt(tokens[3]);
         return new Rect(x, y, x + width, y + height);
-    }
-
-    private static void unlinkSelf() {
-        try {
-            new File(SERVER_PATH).delete();
-        } catch (Exception e) {
-            Ln.e("Could not unlink server", e);
-        }
     }
 
     private static void suggestFix(Throwable e) {
@@ -172,8 +218,10 @@ public final class Server {
             }
         });
 
-        unlinkSelf();
         Options options = createOptions(args);
+
+        Ln.initLogLevel(options.getLogLevel());
+
         scrcpy(options);
     }
 }

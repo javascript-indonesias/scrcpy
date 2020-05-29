@@ -12,6 +12,7 @@ import android.view.Surface;
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ScreenEncoder implements Device.RotationListener {
@@ -25,15 +26,17 @@ public class ScreenEncoder implements Device.RotationListener {
     private final AtomicBoolean rotationChanged = new AtomicBoolean();
     private final ByteBuffer headerBuffer = ByteBuffer.allocate(12);
 
+    private List<CodecOption> codecOptions;
     private int bitRate;
     private int maxFps;
     private boolean sendFrameMeta;
     private long ptsOrigin;
 
-    public ScreenEncoder(boolean sendFrameMeta, int bitRate, int maxFps) {
+    public ScreenEncoder(boolean sendFrameMeta, int bitRate, int maxFps, List<CodecOption> codecOptions) {
         this.sendFrameMeta = sendFrameMeta;
         this.bitRate = bitRate;
         this.maxFps = maxFps;
+        this.codecOptions = codecOptions;
     }
 
     @Override
@@ -47,9 +50,21 @@ public class ScreenEncoder implements Device.RotationListener {
 
     public void streamScreen(Device device, FileDescriptor fd) throws IOException {
         Workarounds.prepareMainLooper();
-        Workarounds.fillAppInfo();
 
-        MediaFormat format = createFormat(bitRate, maxFps, DEFAULT_I_FRAME_INTERVAL);
+        try {
+            internalStreamScreen(device, fd);
+        } catch (NullPointerException e) {
+            // Retry with workarounds enabled:
+            // <https://github.com/Genymobile/scrcpy/issues/365>
+            // <https://github.com/Genymobile/scrcpy/issues/940>
+            Ln.d("Applying workarounds to avoid NullPointerException");
+            Workarounds.fillAppInfo();
+            internalStreamScreen(device, fd);
+        }
+    }
+
+    private void internalStreamScreen(Device device, FileDescriptor fd) throws IOException {
+        MediaFormat format = createFormat(bitRate, maxFps, codecOptions);
         device.setRotationListener(this);
         boolean alive;
         try {
@@ -139,14 +154,31 @@ public class ScreenEncoder implements Device.RotationListener {
         return MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
     }
 
-    private static MediaFormat createFormat(int bitRate, int maxFps, int iFrameInterval) {
+    private static void setCodecOption(MediaFormat format, CodecOption codecOption) {
+        String key = codecOption.getKey();
+        Object value = codecOption.getValue();
+
+        if (value instanceof Integer) {
+            format.setInteger(key, (Integer) value);
+        } else if (value instanceof Long) {
+            format.setLong(key, (Long) value);
+        } else if (value instanceof Float) {
+            format.setFloat(key, (Float) value);
+        } else if (value instanceof String) {
+            format.setString(key, (String) value);
+        }
+
+        Ln.d("Codec option set: " + key + " (" + value.getClass().getSimpleName() + ") = " + value);
+    }
+
+    private static MediaFormat createFormat(int bitRate, int maxFps, List<CodecOption> codecOptions) {
         MediaFormat format = new MediaFormat();
         format.setString(MediaFormat.KEY_MIME, MediaFormat.MIMETYPE_VIDEO_AVC);
         format.setInteger(MediaFormat.KEY_BIT_RATE, bitRate);
         // must be present to configure the encoder, but does not impact the actual frame rate, which is variable
         format.setInteger(MediaFormat.KEY_FRAME_RATE, 60);
         format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
-        format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, iFrameInterval);
+        format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, DEFAULT_I_FRAME_INTERVAL);
         // display the very first frame, and recover from bad quality when no new frames
         format.setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, REPEAT_FRAME_DELAY_US); // µs
         if (maxFps > 0) {
@@ -155,6 +187,13 @@ public class ScreenEncoder implements Device.RotationListener {
             // <https://github.com/Genymobile/scrcpy/issues/488#issuecomment-567321437>
             format.setFloat(KEY_MAX_FPS_TO_ENCODER, maxFps);
         }
+
+        if (codecOptions != null) {
+            for (CodecOption option : codecOptions) {
+                setCodecOption(format, option);
+            }
+        }
+
         return format;
     }
 

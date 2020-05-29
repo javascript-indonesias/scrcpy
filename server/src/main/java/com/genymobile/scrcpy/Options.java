@@ -3,6 +3,7 @@ package com.genymobile.scrcpy;
 import android.graphics.Rect;
 
 public class Options {
+    private Ln.Level logLevel;
     private int maxSize;
     private int bitRate;
     private int maxFps;
@@ -12,6 +13,17 @@ public class Options {
     private boolean sendFrameMeta; // send PTS so that the client may record properly
     private boolean control;
     private int displayId;
+    private boolean showTouches;
+    private boolean stayAwake;
+    private String codecOptions;
+
+    public Ln.Level getLogLevel() {
+        return logLevel;
+    }
+
+    public void setLogLevel(Ln.Level logLevel) {
+        this.logLevel = logLevel;
+    }
 
     public int getMaxSize() {
         return maxSize;
@@ -83,5 +95,29 @@ public class Options {
 
     public void setDisplayId(int displayId) {
         this.displayId = displayId;
+    }
+
+    public boolean getShowTouches() {
+        return showTouches;
+    }
+
+    public void setShowTouches(boolean showTouches) {
+        this.showTouches = showTouches;
+    }
+
+    public boolean getStayAwake() {
+        return stayAwake;
+    }
+
+    public void setStayAwake(boolean stayAwake) {
+        this.stayAwake = stayAwake;
+    }
+
+    public String getCodecOptions() {
+        return codecOptions;
+    }
+
+    public void setCodecOptions(String codecOptions) {
+        this.codecOptions = codecOptions;
     }
 }

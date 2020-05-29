@@ -216,6 +216,7 @@ public class ControlMessageReaderTest {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(bos);
         dos.writeByte(ControlMessage.TYPE_SET_CLIPBOARD);
+        dos.writeByte(1); // paste
         byte[] text = "testé".getBytes(StandardCharsets.UTF_8);
         dos.writeShort(text.length);
         dos.write(text);
@@ -227,6 +228,37 @@ public class ControlMessageReaderTest {
 
         Assert.assertEquals(ControlMessage.TYPE_SET_CLIPBOARD, event.getType());
         Assert.assertEquals("testé", event.getText());
+
+        boolean parse = (event.getFlags() & ControlMessage.FLAGS_PASTE) != 0;
+        Assert.assertTrue(parse);
+    }
+
+    @Test
+    public void testParseBigSetClipboardEvent() throws IOException {
+        ControlMessageReader reader = new ControlMessageReader();
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(bos);
+        dos.writeByte(ControlMessage.TYPE_SET_CLIPBOARD);
+
+        byte[] rawText = new byte[ControlMessageReader.CLIPBOARD_TEXT_MAX_LENGTH];
+        dos.writeByte(1); // paste
+        Arrays.fill(rawText, (byte) 'a');
+        String text = new String(rawText, 0, rawText.length);
+
+        dos.writeShort(rawText.length);
+        dos.write(rawText);
+
+        byte[] packet = bos.toByteArray();
+
+        reader.readFrom(new ByteArrayInputStream(packet));
+        ControlMessage event = reader.next();
+
+        Assert.assertEquals(ControlMessage.TYPE_SET_CLIPBOARD, event.getType());
+        Assert.assertEquals(text, event.getText());
+
+        boolean parse = (event.getFlags() & ControlMessage.FLAGS_PASTE) != 0;
+        Assert.assertTrue(parse);
     }
 
     @Test

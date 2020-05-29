@@ -9,6 +9,7 @@
 #include "config.h"
 #include "command.h"
 #include "common.h"
+#include "util/log.h"
 #include "util/net.h"
 
 struct server {
@@ -43,7 +44,9 @@ struct server {
 }
 
 struct server_params {
+    enum sc_log_level log_level;
     const char *crop;
+    const char *codec_options;
     struct port_range port_range;
     uint16_t max_size;
     uint32_t bit_rate;
@@ -51,6 +54,9 @@ struct server_params {
     int8_t lock_video_orientation;
     bool control;
     uint16_t display_id;
+    bool show_touches;
+    bool stay_awake;
+    bool force_adb_forward;
 };
 
 // init default values

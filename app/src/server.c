@@ -217,16 +217,38 @@ enable_tunnel_forward_any_port(struct server *server,
 }
 
 static bool
-enable_tunnel_any_port(struct server *server, struct port_range port_range) {
-    if (enable_tunnel_reverse_any_port(server, port_range)) {
-        return true;
+enable_tunnel_any_port(struct server *server, struct port_range port_range,
+                       bool force_adb_forward) {
+    if (!force_adb_forward) {
+        // Attempt to use "adb reverse"
+        if (enable_tunnel_reverse_any_port(server, port_range)) {
+            return true;
+        }
+
+        // if "adb reverse" does not work (e.g. over "adb connect"), it
+        // fallbacks to "adb forward", so the app socket is the client
+
+        LOGW("'adb reverse' failed, fallback to 'adb forward'");
     }
 
-    // if "adb reverse" does not work (e.g. over "adb connect"), it fallbacks to
-    // "adb forward", so the app socket is the client
-
-    LOGW("'adb reverse' failed, fallback to 'adb forward'");
     return enable_tunnel_forward_any_port(server, port_range);
+}
+
+static const char *
+log_level_to_server_string(enum sc_log_level level) {
+    switch (level) {
+        case SC_LOG_LEVEL_DEBUG:
+            return "debug";
+        case SC_LOG_LEVEL_INFO:
+            return "info";
+        case SC_LOG_LEVEL_WARN:
+            return "warn";
+        case SC_LOG_LEVEL_ERROR:
+            return "error";
+        default:
+            assert(!"unexpected log level");
+            return "(unknown)";
+    }
 }
 
 static process_t
@@ -234,7 +256,7 @@ execute_server(struct server *server, const struct server_params *params) {
     char max_size_string[6];
     char bit_rate_string[11];
     char max_fps_string[6];
-    char lock_video_orientation_string[3];
+    char lock_video_orientation_string[5];
     char display_id_string[6];
     sprintf(max_size_string, "%"PRIu16, params->max_size);
     sprintf(bit_rate_string, "%"PRIu32, params->bit_rate);
@@ -259,6 +281,7 @@ execute_server(struct server *server, const struct server_params *params) {
         "/", // unused
         "com.genymobile.scrcpy.Server",
         SCRCPY_VERSION,
+        log_level_to_server_string(params->log_level),
         max_size_string,
         bit_rate_string,
         max_fps_string,
@@ -268,6 +291,9 @@ execute_server(struct server *server, const struct server_params *params) {
         "true", // always send frame meta (packet boundaries + timestamp)
         params->control ? "true" : "false",
         display_id_string,
+        params->show_touches ? "true" : "false",
+        params->stay_awake ? "true" : "false",
+        params->codec_options ? params->codec_options : "-",
     };
 #ifdef SERVER_DEBUGGER
     LOGI("Server debugger waiting for a client on device port "
@@ -363,7 +389,8 @@ server_start(struct server *server, const char *serial,
         goto error1;
     }
 
-    if (!enable_tunnel_any_port(server, params->port_range)) {
+    if (!enable_tunnel_any_port(server, params->port_range,
+                                params->force_adb_forward)) {
         goto error1;
     }
 

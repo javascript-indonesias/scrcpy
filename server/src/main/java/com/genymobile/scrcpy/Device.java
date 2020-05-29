@@ -1,16 +1,23 @@
 package com.genymobile.scrcpy;
 
+import com.genymobile.scrcpy.wrappers.ContentProvider;
 import com.genymobile.scrcpy.wrappers.InputManager;
 import com.genymobile.scrcpy.wrappers.ServiceManager;
 import com.genymobile.scrcpy.wrappers.SurfaceControl;
 import com.genymobile.scrcpy.wrappers.WindowManager;
 
+import android.content.IOnPrimaryClipChangedListener;
 import android.graphics.Rect;
 import android.os.Build;
 import android.os.IBinder;
-import android.os.RemoteException;
+import android.os.SystemClock;
 import android.view.IRotationWatcher;
+import android.view.InputDevice;
 import android.view.InputEvent;
+import android.view.KeyCharacterMap;
+import android.view.KeyEvent;
+
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class Device {
 
@@ -21,10 +28,16 @@ public final class Device {
         void onRotationChanged(int rotation);
     }
 
+    public interface ClipboardListener {
+        void onClipboardTextChanged(String text);
+    }
+
     private final ServiceManager serviceManager = new ServiceManager();
 
     private ScreenInfo screenInfo;
     private RotationListener rotationListener;
+    private ClipboardListener clipboardListener;
+    private final AtomicBoolean isSettingClipboard = new AtomicBoolean();
 
     /**
      * Logical display identifier
@@ -51,9 +64,9 @@ public final class Device {
         screenInfo = ScreenInfo.computeScreenInfo(displayInfo, options.getCrop(), options.getMaxSize(), options.getLockedVideoOrientation());
         layerStack = displayInfo.getLayerStack();
 
-        registerRotationWatcher(new IRotationWatcher.Stub() {
+        serviceManager.getWindowManager().registerRotationWatcher(new IRotationWatcher.Stub() {
             @Override
-            public void onRotationChanged(int rotation) throws RemoteException {
+            public void onRotationChanged(int rotation) {
                 synchronized (Device.this) {
                     screenInfo = screenInfo.withDeviceRotation(rotation);
 
@@ -64,6 +77,27 @@ public final class Device {
                 }
             }
         }, displayId);
+
+        if (options.getControl()) {
+            // If control is enabled, synchronize Android clipboard to the computer automatically
+            serviceManager.getClipboardManager().addPrimaryClipChangedListener(new IOnPrimaryClipChangedListener.Stub() {
+                @Override
+                public void dispatchPrimaryClipChanged() {
+                    if (isSettingClipboard.get()) {
+                        // This is a notification for the change we are currently applying, ignore it
+                        return;
+                    }
+                    synchronized (Device.this) {
+                        if (clipboardListener != null) {
+                            String text = getClipboardText();
+                            if (text != null) {
+                                clipboardListener.onClipboardTextChanged(text);
+                            }
+                        }
+                    }
+                }
+            });
+        }
 
         if ((displayInfoFlags & DisplayInfo.FLAG_SUPPORTS_PROTECTED_BUFFERS) == 0) {
             Ln.w("Display doesn't have FLAG_SUPPORTS_PROTECTED_BUFFERS flag, mirroring can be restricted");
@@ -117,7 +151,7 @@ public final class Device {
         return supportsInputEvents;
     }
 
-    public boolean injectInputEvent(InputEvent inputEvent, int mode) {
+    public boolean injectEvent(InputEvent inputEvent, int mode) {
         if (!supportsInputEvents()) {
             throw new AssertionError("Could not inject input event if !supportsInputEvents()");
         }
@@ -129,16 +163,31 @@ public final class Device {
         return serviceManager.getInputManager().injectInputEvent(inputEvent, mode);
     }
 
+    public boolean injectEvent(InputEvent event) {
+        return injectEvent(event, InputManager.INJECT_INPUT_EVENT_MODE_ASYNC);
+    }
+
+    public boolean injectKeyEvent(int action, int keyCode, int repeat, int metaState) {
+        long now = SystemClock.uptimeMillis();
+        KeyEvent event = new KeyEvent(now, now, action, keyCode, repeat, metaState, KeyCharacterMap.VIRTUAL_KEYBOARD, 0, 0,
+                InputDevice.SOURCE_KEYBOARD);
+        return injectEvent(event);
+    }
+
+    public boolean injectKeycode(int keyCode) {
+        return injectKeyEvent(KeyEvent.ACTION_DOWN, keyCode, 0, 0) && injectKeyEvent(KeyEvent.ACTION_UP, keyCode, 0, 0);
+    }
+
     public boolean isScreenOn() {
         return serviceManager.getPowerManager().isScreenOn();
     }
 
-    public void registerRotationWatcher(IRotationWatcher rotationWatcher, int displayId) {
-        serviceManager.getWindowManager().registerRotationWatcher(rotationWatcher, displayId);
-    }
-
     public synchronized void setRotationListener(RotationListener rotationListener) {
         this.rotationListener = rotationListener;
+    }
+
+    public synchronized void setClipboardListener(ClipboardListener clipboardListener) {
+        this.clipboardListener = clipboardListener;
     }
 
     public void expandNotificationPanel() {
@@ -157,26 +206,23 @@ public final class Device {
         return s.toString();
     }
 
-    public void setClipboardText(String text) {
+    public boolean setClipboardText(String text) {
+        isSettingClipboard.set(true);
         boolean ok = serviceManager.getClipboardManager().setText(text);
-        if (ok) {
-            Ln.i("Device clipboard set");
-        }
+        isSettingClipboard.set(false);
+        return ok;
     }
 
     /**
      * @param mode one of the {@code SCREEN_POWER_MODE_*} constants
      */
-    public void setScreenPowerMode(int mode) {
+    public boolean setScreenPowerMode(int mode) {
         IBinder d = SurfaceControl.getBuiltInDisplay();
         if (d == null) {
             Ln.e("Could not get built-in display");
-            return;
+            return false;
         }
-        boolean ok = SurfaceControl.setDisplayPowerMode(d, mode);
-        if (ok) {
-            Ln.i("Device screen turned " + (mode == Device.POWER_MODE_OFF ? "off" : "on"));
-        }
+        return SurfaceControl.setDisplayPowerMode(d, mode);
     }
 
     /**
@@ -198,5 +244,9 @@ public final class Device {
         if (accelerometerRotation) {
             wm.thawRotation();
         }
+    }
+
+    public ContentProvider createSettingsProvider() {
+        return serviceManager.getActivityManager().createSettingsProvider();
     }
 }

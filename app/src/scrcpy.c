@@ -7,6 +7,10 @@
 #include <sys/time.h>
 #include <SDL2/SDL.h>
 
+#ifdef _WIN32
+# include <windows.h>
+#endif
+
 #include "config.h"
 #include "command.h"
 #include "common.h"
@@ -45,6 +49,18 @@ static struct input_manager input_manager = {
     .prefer_text = false, // initialized later
 };
 
+#ifdef _WIN32
+BOOL WINAPI windows_ctrl_handler(DWORD ctrl_type) {
+    if (ctrl_type == CTRL_C_EVENT) {
+        SDL_Event event;
+        event.type = SDL_QUIT;
+        SDL_PushEvent(&event);
+        return TRUE;
+    }
+    return FALSE;
+}
+#endif // _WIN32
+
 // init SDL and set appropriate hints
 static bool
 sdl_init_and_configure(bool display, const char *render_driver) {
@@ -55,6 +71,14 @@ sdl_init_and_configure(bool display, const char *render_driver) {
     }
 
     atexit(SDL_Quit);
+
+#ifdef _WIN32
+    // Clean up properly on Ctrl+C on Windows
+    bool ok = SetConsoleCtrlHandler(windows_ctrl_handler, TRUE);
+    if (!ok) {
+        LOGW("Could not set Ctrl+C handler");
+    }
+#endif // _WIN32
 
     if (!display) {
         return true;
@@ -109,10 +133,10 @@ static int
 event_watcher(void *data, SDL_Event *event) {
     (void) data;
     if (event->type == SDL_WINDOWEVENT
-            && event->window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+            && event->window.event == SDL_WINDOWEVENT_RESIZED) {
         // In practice, it seems to always be called from the same thread in
         // that specific case. Anyway, it's just a workaround.
-        screen_handle_window_event(&screen, &event->window);
+        screen_render(&screen, true);
     }
     return 0;
 }
@@ -229,21 +253,6 @@ event_loop(bool display, bool control) {
     return false;
 }
 
-static process_t
-set_show_touches_enabled(const char *serial, bool enabled) {
-    const char *value = enabled ? "1" : "0";
-    const char *const adb_cmd[] = {
-        "shell", "settings", "put", "system", "show_touches", value
-    };
-    return adb_execute(serial, adb_cmd, ARRAY_LEN(adb_cmd));
-}
-
-static void
-wait_show_touches(process_t process) {
-    // reap the process, ignore the result
-    process_check_success(process, "show_touches");
-}
-
 static SDL_LogPriority
 sdl_priority_from_av_level(int level) {
     switch (level) {
@@ -284,6 +293,7 @@ bool
 scrcpy(const struct scrcpy_options *options) {
     bool record = !!options->record_filename;
     struct server_params params = {
+        .log_level = options->log_level,
         .crop = options->crop,
         .port_range = options->port_range,
         .max_size = options->max_size,
@@ -292,17 +302,13 @@ scrcpy(const struct scrcpy_options *options) {
         .lock_video_orientation = options->lock_video_orientation,
         .control = options->control,
         .display_id = options->display_id,
+        .show_touches = options->show_touches,
+        .stay_awake = options->stay_awake,
+        .codec_options = options->codec_options,
+        .force_adb_forward = options->force_adb_forward,
     };
     if (!server_start(&server, options->serial, &params)) {
         return false;
-    }
-
-    process_t proc_show_touches = PROCESS_NONE;
-    bool show_touches_waited;
-    if (options->show_touches) {
-        LOGI("Enable show_touches");
-        proc_show_touches = set_show_touches_enabled(options->serial, true);
-        show_touches_waited = false;
     }
 
     bool ret = false;
@@ -421,11 +427,6 @@ scrcpy(const struct scrcpy_options *options) {
         }
     }
 
-    if (options->show_touches) {
-        wait_show_touches(proc_show_touches);
-        show_touches_waited = true;
-    }
-
     input_manager.prefer_text = options->prefer_text;
 
     ret = event_loop(options->display, options->control);
@@ -480,16 +481,6 @@ end:
     if (fps_counter_initialized) {
         fps_counter_join(&fps_counter);
         fps_counter_destroy(&fps_counter);
-    }
-
-    if (options->show_touches) {
-        if (!show_touches_waited) {
-            // wait the process which enabled "show touches"
-            wait_show_touches(proc_show_touches);
-        }
-        LOGI("Disable show_touches");
-        proc_show_touches = set_show_touches_enabled(options->serial, false);
-        wait_show_touches(proc_show_touches);
     }
 
     server_destroy(&server);

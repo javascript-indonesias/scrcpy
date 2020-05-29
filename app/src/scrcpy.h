@@ -8,6 +8,7 @@
 #include "common.h"
 #include "input_manager.h"
 #include "recorder.h"
+#include "util/log.h"
 
 struct scrcpy_options {
     const char *serial;
@@ -16,6 +17,8 @@ struct scrcpy_options {
     const char *window_title;
     const char *push_target;
     const char *render_driver;
+    const char *codec_options;
+    enum sc_log_level log_level;
     enum recorder_format record_format;
     struct port_range port_range;
     uint16_t max_size;
@@ -38,6 +41,8 @@ struct scrcpy_options {
     bool prefer_text;
     bool window_borderless;
     bool mipmaps;
+    bool stay_awake;
+    bool force_adb_forward;
 };
 
 #define SCRCPY_OPTIONS_DEFAULT { \
@@ -47,6 +52,8 @@ struct scrcpy_options {
     .window_title = NULL, \
     .push_target = NULL, \
     .render_driver = NULL, \
+    .codec_options = NULL, \
+    .log_level = SC_LOG_LEVEL_INFO, \
     .record_format = RECORDER_FORMAT_AUTO, \
     .port_range = { \
         .first = DEFAULT_LOCAL_PORT_RANGE_FIRST, \
@@ -72,6 +79,8 @@ struct scrcpy_options {
     .prefer_text = false, \
     .window_borderless = false, \
     .mipmaps = true, \
+    .stay_awake = false, \
+    .force_adb_forward = false, \
 }
 
 bool

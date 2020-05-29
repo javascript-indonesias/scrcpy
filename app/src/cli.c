@@ -30,6 +30,15 @@ scrcpy_print_usage(const char *arg0) {
         "        Unit suffixes are supported: 'K' (x1000) and 'M' (x1000000).\n"
         "        Default is %d.\n"
         "\n"
+        "    --codec-options key[:type]=value[,...]\n"
+        "        Set a list of comma-separated key:type=value options for the\n"
+        "        device encoder.\n"
+        "        The possible values for 'type' are 'int' (default), 'long',\n"
+        "        'float' and 'string'.\n"
+        "        The list of possible codec options is available in the\n"
+        "        Android documentation:\n"
+        "        <https://d.android.com/reference/android/media/MediaFormat>\n"
+        "\n"
         "    --crop width:height:x:y\n"
         "        Crop the device screen on the server.\n"
         "        The values are expressed in the device natural orientation\n"
@@ -44,6 +53,10 @@ scrcpy_print_usage(const char *arg0) {
         "        (search \"mDisplayId=\" in the output)\n"
         "\n"
         "        Default is 0.\n"
+        "\n"
+        "    --force-adb-forward\n"
+        "        Do not attempt to use \"adb reverse\" to connect to the\n"
+        "        the device.\n"
         "\n"
         "    -f, --fullscreen\n"
         "        Start in fullscreen.\n"
@@ -130,11 +143,24 @@ scrcpy_print_usage(const char *arg0) {
         "        Turn the device screen off immediately.\n"
         "\n"
         "    -t, --show-touches\n"
-        "        Enable \"show touches\" on start, disable on quit.\n"
+        "        Enable \"show touches\" on start, restore the initial value\n"
+        "        on exit.\n"
         "        It only shows physical touches (not clicks from scrcpy).\n"
         "\n"
         "    -v, --version\n"
         "        Print the version of scrcpy.\n"
+        "\n"
+        "    -V, --verbosity value\n"
+        "        Set the log level (debug, info, warn or error).\n"
+#ifndef NDEBUG
+        "        Default is debug.\n"
+#else
+        "        Default is info.\n"
+#endif
+        "\n"
+        "    -w, --stay-awake\n"
+        "        Keep the device on while scrcpy is running, when the device\n"
+        "        is plugged in.\n"
         "\n"
         "    --window-borderless\n"
         "        Disable window decorations (display borderless window).\n"
@@ -206,6 +232,9 @@ scrcpy_print_usage(const char *arg0) {
         "    " CTRL_OR_CMD "+o\n"
         "        Turn device screen off (keep mirroring)\n"
         "\n"
+        "    " CTRL_OR_CMD "+Shift+o\n"
+        "        Turn device screen on\n"
+        "\n"
         "    " CTRL_OR_CMD "+r\n"
         "        Rotate device screen\n"
         "\n"
@@ -222,7 +251,8 @@ scrcpy_print_usage(const char *arg0) {
         "        Paste computer clipboard to device\n"
         "\n"
         "    " CTRL_OR_CMD "+Shift+v\n"
-        "        Copy computer clipboard to device\n"
+        "        Copy computer clipboard to device (and paste if the device\n"
+        "        runs Android >= 7)\n"
         "\n"
         "    " CTRL_OR_CMD "+i\n"
         "        Enable/disable FPS counter (print frames/second in logs)\n"
@@ -421,6 +451,32 @@ parse_display_id(const char *s, uint16_t *display_id) {
 }
 
 static bool
+parse_log_level(const char *s, enum sc_log_level *log_level) {
+    if (!strcmp(s, "debug")) {
+        *log_level = SC_LOG_LEVEL_DEBUG;
+        return true;
+    }
+
+    if (!strcmp(s, "info")) {
+        *log_level = SC_LOG_LEVEL_INFO;
+        return true;
+    }
+
+    if (!strcmp(s, "warn")) {
+        *log_level = SC_LOG_LEVEL_WARN;
+        return true;
+    }
+
+    if (!strcmp(s, "error")) {
+        *log_level = SC_LOG_LEVEL_ERROR;
+        return true;
+    }
+
+    LOGE("Could not parse log level: %s", s);
+    return false;
+}
+
+static bool
 parse_record_format(const char *optarg, enum recorder_format *format) {
     if (!strcmp(optarg, "mp4")) {
         *format = RECORDER_FORMAT_MP4;
@@ -468,14 +524,19 @@ guess_record_format(const char *filename) {
 #define OPT_ROTATION               1015
 #define OPT_RENDER_DRIVER          1016
 #define OPT_NO_MIPMAPS             1017
+#define OPT_CODEC_OPTIONS          1018
+#define OPT_FORCE_ADB_FORWARD      1019
 
 bool
 scrcpy_parse_args(struct scrcpy_cli_args *args, int argc, char *argv[]) {
     static const struct option long_options[] = {
         {"always-on-top",          no_argument,       NULL, OPT_ALWAYS_ON_TOP},
         {"bit-rate",               required_argument, NULL, 'b'},
+        {"codec-options",          required_argument, NULL, OPT_CODEC_OPTIONS},
         {"crop",                   required_argument, NULL, OPT_CROP},
         {"display",                required_argument, NULL, OPT_DISPLAY_ID},
+        {"force-adb-forward",      no_argument,       NULL,
+                                                  OPT_FORCE_ADB_FORWARD},
         {"fullscreen",             no_argument,       NULL, 'f'},
         {"help",                   no_argument,       NULL, 'h'},
         {"lock-video-orientation", required_argument, NULL,
@@ -486,6 +547,7 @@ scrcpy_parse_args(struct scrcpy_cli_args *args, int argc, char *argv[]) {
         {"no-display",             no_argument,       NULL, 'N'},
         {"no-mipmaps",             no_argument,       NULL, OPT_NO_MIPMAPS},
         {"port",                   required_argument, NULL, 'p'},
+        {"prefer-text",            no_argument,       NULL, OPT_PREFER_TEXT},
         {"push-target",            required_argument, NULL, OPT_PUSH_TARGET},
         {"record",                 required_argument, NULL, 'r'},
         {"record-format",          required_argument, NULL, OPT_RECORD_FORMAT},
@@ -495,8 +557,9 @@ scrcpy_parse_args(struct scrcpy_cli_args *args, int argc, char *argv[]) {
         {"rotation",               required_argument, NULL, OPT_ROTATION},
         {"serial",                 required_argument, NULL, 's'},
         {"show-touches",           no_argument,       NULL, 't'},
+        {"stay-awake",             no_argument,       NULL, 'w'},
         {"turn-screen-off",        no_argument,       NULL, 'S'},
-        {"prefer-text",            no_argument,       NULL, OPT_PREFER_TEXT},
+        {"verbosity",              required_argument, NULL, 'V'},
         {"version",                no_argument,       NULL, 'v'},
         {"window-title",           required_argument, NULL, OPT_WINDOW_TITLE},
         {"window-x",               required_argument, NULL, OPT_WINDOW_X},
@@ -513,8 +576,8 @@ scrcpy_parse_args(struct scrcpy_cli_args *args, int argc, char *argv[]) {
     optind = 0; // reset to start from the first argument in tests
 
     int c;
-    while ((c = getopt_long(argc, argv, "b:c:fF:hm:nNp:r:s:StTv", long_options,
-                            NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "b:c:fF:hm:nNp:r:s:StTvV:w",
+                            long_options, NULL)) != -1) {
         switch (c) {
             case 'b':
                 if (!parse_bit_rate(optarg, &opts->bit_rate)) {
@@ -593,6 +656,14 @@ scrcpy_parse_args(struct scrcpy_cli_args *args, int argc, char *argv[]) {
             case 'v':
                 args->version = true;
                 break;
+            case 'V':
+                if (!parse_log_level(optarg, &opts->log_level)) {
+                    return false;
+                }
+                break;
+            case 'w':
+                opts->stay_awake = true;
+                break;
             case OPT_RENDER_EXPIRED_FRAMES:
                 opts->render_expired_frames = true;
                 break;
@@ -639,6 +710,12 @@ scrcpy_parse_args(struct scrcpy_cli_args *args, int argc, char *argv[]) {
             case OPT_NO_MIPMAPS:
                 opts->mipmaps = false;
                 break;
+            case OPT_CODEC_OPTIONS:
+                opts->codec_options = optarg;
+                break;
+            case OPT_FORCE_ADB_FORWARD:
+                opts->force_adb_forward = true;
+                break;
             default:
                 // getopt prints the error message on stderr
                 return false;
@@ -672,6 +749,11 @@ scrcpy_parse_args(struct scrcpy_cli_args *args, int argc, char *argv[]) {
 
     if (!opts->control && opts->turn_screen_off) {
         LOGE("Could not request to turn screen off if control is disabled");
+        return false;
+    }
+
+    if (!opts->control && opts->stay_awake) {
+        LOGE("Could not request to stay awake if control is disabled");
         return false;
     }
 

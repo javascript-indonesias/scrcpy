@@ -1,4 +1,4 @@
-# scrcpy (v1.13)
+# scrcpy (v1.14)
 
 This application provides display and control of Android devices connected on
 USB (or [over TCP/IP][article-tcpip]). It does not require any _root_ access.
@@ -69,10 +69,10 @@ hard).
 For Windows, for simplicity, a prebuilt archive with all the dependencies
 (including `adb`) is available:
 
- - [`scrcpy-win64-v1.13.zip`][direct-win64]  
-   _(SHA-256: 806aafc00d4db01513193addaa24f47858893ba5efe75770bfef6ae1ea987d27)_
+ - [`scrcpy-win64-v1.14.zip`][direct-win64]  
+   _(SHA-256: 2be9139e46e29cf2f5f695848bb2b75a543b8f38be1133257dc5068252abc25f)_
 
-[direct-win64]: https://github.com/Genymobile/scrcpy/releases/download/v1.13/scrcpy-win64-v1.13.zip
+[direct-win64]: https://github.com/Genymobile/scrcpy/releases/download/v1.14/scrcpy-win64-v1.14.zip
 
 It is also available in [Chocolatey]:
 
@@ -210,7 +210,6 @@ To disable mirroring while recording:
 scrcpy --no-display --record file.mp4
 scrcpy -Nr file.mkv
 # interrupt recording with Ctrl+C
-# Ctrl+C does not terminate properly on Windows, so disconnect the device
 ```
 
 "Skipped frames" are recorded, even if they are not displayed in real time (for
@@ -289,6 +288,22 @@ From another terminal:
 ```bash
 scrcpy
 ```
+
+To avoid enabling remote port forwarding, you could force a forward connection
+instead (notice the `-L` instead of `-R`):
+
+```bash
+adb kill-server    # kill the local adb server on 5037
+ssh -CN -L5037:localhost:5037 -L27183:localhost:27183 your_remote_computer
+# keep this open
+```
+
+From another terminal:
+
+```bash
+scrcpy --force-adb-forwrad
+```
+
 
 Like for wireless connections, it may be useful to reduce quality:
 
@@ -400,6 +415,18 @@ The secondary display may only be controlled if the device runs at least Android
 10 (otherwise it is mirrored in read-only).
 
 
+#### Stay awake
+
+To prevent the device to sleep after some delay when the device is plugged in:
+
+```bash
+scrcpy --stay-awake
+scrcpy -w
+```
+
+The initial state is restored when scrcpy is closed.
+
+
 #### Turn screen off
 
 It is possible to turn the device screen off while mirroring on start with a
@@ -412,7 +439,15 @@ scrcpy -S
 
 Or by pressing `Ctrl`+`o` at any time.
 
-To turn it back on, press `POWER` (or `Ctrl`+`p`).
+To turn it back on, press `Ctrl`+`Shift`+`o` (or `POWER`, `Ctrl`+`p`).
+
+It can be useful to also prevent the device to sleep:
+
+```bash
+scrcpy --turn-screen-off --stay-awake
+scrcpy -Sw
+```
+
 
 #### Render expired frames
 
@@ -433,7 +468,8 @@ device).
 
 Android provides this feature in _Developers options_.
 
-_Scrcpy_ provides an option to enable this feature on start and disable on exit:
+_Scrcpy_ provides an option to enable this feature on start and restore the
+initial value on exit:
 
 ```bash
 scrcpy --show-touches
@@ -458,9 +494,13 @@ It is possible to synchronize clipboards between the computer and the device, in
 both directions:
 
  - `Ctrl`+`c` copies the device clipboard to the computer clipboard;
- - `Ctrl`+`Shift`+`v` copies the computer clipboard to the device clipboard;
+ - `Ctrl`+`Shift`+`v` copies the computer clipboard to the device clipboard (and
+   pastes if the device runs Android >= 7);
  - `Ctrl`+`v` _pastes_ the computer clipboard as a sequence of text events (but
    breaks non-ASCII characters).
+
+Moreover, any time the Android clipboard changes, it is automatically
+synchronized to the computer clipboard.
 
 #### Text injection preference
 
@@ -520,29 +560,30 @@ Also see [issue #14].
 
 ## Shortcuts
 
- | Action                                 |   Shortcut                    |   Shortcut (macOS)
- | -------------------------------------- |:----------------------------- |:-----------------------------
- | Switch fullscreen mode                 | `Ctrl`+`f`                    | `Cmd`+`f`
- | Rotate display left                    | `Ctrl`+`←` _(left)_           | `Cmd`+`←` _(left)_
- | Rotate display right                   | `Ctrl`+`→` _(right)_          | `Cmd`+`→` _(right)_
- | Resize window to 1:1 (pixel-perfect)   | `Ctrl`+`g`                    | `Cmd`+`g`
- | Resize window to remove black borders  | `Ctrl`+`x` \| _Double-click¹_ | `Cmd`+`x`  \| _Double-click¹_
- | Click on `HOME`                        | `Ctrl`+`h` \| _Middle-click_  | `Ctrl`+`h` \| _Middle-click_
- | Click on `BACK`                        | `Ctrl`+`b` \| _Right-click²_  | `Cmd`+`b`  \| _Right-click²_
- | Click on `APP_SWITCH`                  | `Ctrl`+`s`                    | `Cmd`+`s`
- | Click on `MENU`                        | `Ctrl`+`m`                    | `Ctrl`+`m`
- | Click on `VOLUME_UP`                   | `Ctrl`+`↑` _(up)_             | `Cmd`+`↑` _(up)_
- | Click on `VOLUME_DOWN`                 | `Ctrl`+`↓` _(down)_           | `Cmd`+`↓` _(down)_
- | Click on `POWER`                       | `Ctrl`+`p`                    | `Cmd`+`p`
- | Power on                               | _Right-click²_                | _Right-click²_
- | Turn device screen off (keep mirroring)| `Ctrl`+`o`                    | `Cmd`+`o`
- | Rotate device screen                   | `Ctrl`+`r`                    | `Cmd`+`r`
- | Expand notification panel              | `Ctrl`+`n`                    | `Cmd`+`n`
- | Collapse notification panel            | `Ctrl`+`Shift`+`n`            | `Cmd`+`Shift`+`n`
- | Copy device clipboard to computer      | `Ctrl`+`c`                    | `Cmd`+`c`
- | Paste computer clipboard to device     | `Ctrl`+`v`                    | `Cmd`+`v`
- | Copy computer clipboard to device      | `Ctrl`+`Shift`+`v`            | `Cmd`+`Shift`+`v`
- | Enable/disable FPS counter (on stdout) | `Ctrl`+`i`                    | `Cmd`+`i`
+ | Action                                      |   Shortcut                    |   Shortcut (macOS)
+ | ------------------------------------------- |:----------------------------- |:-----------------------------
+ | Switch fullscreen mode                      | `Ctrl`+`f`                    | `Cmd`+`f`
+ | Rotate display left                         | `Ctrl`+`←` _(left)_           | `Cmd`+`←` _(left)_
+ | Rotate display right                        | `Ctrl`+`→` _(right)_          | `Cmd`+`→` _(right)_
+ | Resize window to 1:1 (pixel-perfect)        | `Ctrl`+`g`                    | `Cmd`+`g`
+ | Resize window to remove black borders       | `Ctrl`+`x` \| _Double-click¹_ | `Cmd`+`x`  \| _Double-click¹_
+ | Click on `HOME`                             | `Ctrl`+`h` \| _Middle-click_  | `Ctrl`+`h` \| _Middle-click_
+ | Click on `BACK`                             | `Ctrl`+`b` \| _Right-click²_  | `Cmd`+`b`  \| _Right-click²_
+ | Click on `APP_SWITCH`                       | `Ctrl`+`s`                    | `Cmd`+`s`
+ | Click on `MENU`                             | `Ctrl`+`m`                    | `Ctrl`+`m`
+ | Click on `VOLUME_UP`                        | `Ctrl`+`↑` _(up)_             | `Cmd`+`↑` _(up)_
+ | Click on `VOLUME_DOWN`                      | `Ctrl`+`↓` _(down)_           | `Cmd`+`↓` _(down)_
+ | Click on `POWER`                            | `Ctrl`+`p`                    | `Cmd`+`p`
+ | Power on                                    | _Right-click²_                | _Right-click²_
+ | Turn device screen off (keep mirroring)     | `Ctrl`+`o`                    | `Cmd`+`o`
+ | Turn device screen on                       | `Ctrl`+`Shift`+`o`            | `Cmd`+`Shift`+`o`
+ | Rotate device screen                        | `Ctrl`+`r`                    | `Cmd`+`r`
+ | Expand notification panel                   | `Ctrl`+`n`                    | `Cmd`+`n`
+ | Collapse notification panel                 | `Ctrl`+`Shift`+`n`            | `Cmd`+`Shift`+`n`
+ | Copy device clipboard to computer           | `Ctrl`+`c`                    | `Cmd`+`c`
+ | Paste computer clipboard to device          | `Ctrl`+`v`                    | `Cmd`+`v`
+ | Copy computer clipboard to device and paste | `Ctrl`+`Shift`+`v`            | `Cmd`+`Shift`+`v`
+ | Enable/disable FPS counter (on stdout)      | `Ctrl`+`i`                    | `Cmd`+`i`
 
 _¹Double-click on black borders to remove them._  
 _²Right-click turns the screen on if it was off, presses BACK otherwise._
