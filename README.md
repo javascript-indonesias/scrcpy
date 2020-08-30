@@ -1,4 +1,6 @@
-# scrcpy (v1.15.1)
+# scrcpy (v1.16)
+
+[Read in another language](#translations)
 
 This application provides display and control of Android devices connected on
 USB (or [over TCP/IP][article-tcpip]). It does not require any _root_ access.
@@ -75,10 +77,10 @@ hard).
 For Windows, for simplicity, a prebuilt archive with all the dependencies
 (including `adb`) is available:
 
- - [`scrcpy-win64-v1.15.1.zip`][direct-win64]  
-   _(SHA-256: 78fba4caad6328016ea93219254b5df391f24224c519a2c8e3f070695b8b38ff)_
+ - [`scrcpy-win64-v1.16.zip`][direct-win64]  
+   _(SHA-256: 3f30dc5db1a2f95c2b40a0f5de91ec1642d9f53799250a8c529bc882bc0918f0)_
 
-[direct-win64]: https://github.com/Genymobile/scrcpy/releases/download/v1.15.1/scrcpy-win64-v1.15.1.zip
+[direct-win64]: https://github.com/Genymobile/scrcpy/releases/download/v1.16/scrcpy-win64-v1.16.zip
 
 It is also available in [Chocolatey]:
 
@@ -546,6 +548,19 @@ into the device clipboard. As a consequence, any Android application could read
 its content. You should avoid to paste sensitive content (like passwords) that
 way.
 
+
+#### Pinch-to-zoom
+
+To simulate "pinch-to-zoom": <kbd>Ctrl</kbd>+_click-and-move_.
+
+More precisely, hold <kbd>Ctrl</kbd> while pressing the left-click button. Until
+the left-click button is released, all mouse movements scale and rotate the
+content (if supported by the app) relative to the center of the screen.
+
+Concretely, scrcpy generates additional touch events from a "virtual finger" at
+a location inverted through the center of the screen.
+
+
 #### Text injection preference
 
 There are two kinds of [events][textevents] generated when typing text:
@@ -659,6 +674,7 @@ _<kbd>[Super]</kbd> is typically the <kbd>Windows</kbd> or <kbd>Cmd</kbd> key._
  | Synchronize clipboards and paste³           | <kbd>MOD</kbd>+<kbd>v</kbd>
  | Inject computer clipboard text              | <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>v</kbd>
  | Enable/disable FPS counter (on stdout)      | <kbd>MOD</kbd>+<kbd>i</kbd>
+ | Pinch-to-zoom                               | <kbd>Ctrl</kbd>+_click-and-move_
 
 _¹Double-click on black borders to remove them._  
 _²Right-click turns the screen on if it was off, presses BACK otherwise._  
@@ -734,3 +750,13 @@ Read the [developers page].
 
 [article-intro]: https://blog.rom1v.com/2018/03/introducing-scrcpy/
 [article-tcpip]: https://www.genymotion.com/blog/open-source-project-scrcpy-now-works-wirelessly/
+
+## Translations
+
+This README is available in other languages:
+
+- [繁體中文 (Traditional Chinese, `zh-Hant`) - v1.15](README.zh-Hant.md)
+- [한국어 (Korean, `ko`) - v1.11](README.ko.md)
+- [português brasileiro (Brazilian Portuguese, `pt-BR`) - v1.12.1](README.pt-br.md)
+
+Only this README file is guaranteed to be up-to-date.

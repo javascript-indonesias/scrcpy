@@ -203,7 +203,7 @@ scrcpy_print_usage(const char *arg0) {
         "\n"
         "    In the following list, MOD is the shortcut modifier. By default,\n"
         "    it's (left) Alt or (left) Super, but it can be configured by\n"
-        "    --shortcut-mod.\n"
+        "    --shortcut-mod (see above).\n"
         "\n"
         "    MOD+f\n"
         "        Switch fullscreen mode\n"
@@ -278,6 +278,9 @@ scrcpy_print_usage(const char *arg0) {
         "\n"
         "    MOD+i\n"
         "        Enable/disable FPS counter (print frames/second in logs)\n"
+        "\n"
+        "    Ctrl+click-and-move\n"
+        "        Pinch-to-zoom from the center of the screen\n"
         "\n"
         "    Drag & drop APK file\n"
         "        Install APK from computer\n"
@@ -529,7 +532,9 @@ parse_shortcut_mods_item(const char *item, size_t len) {
         } else if (STREQ("rsuper", item, key_len)) {
             mod |= SC_MOD_RSUPER;
         } else {
-            LOGW("Unknown modifier key: %.*s", (int) key_len, item);
+            LOGE("Unknown modifier key: %.*s "
+                 "(must be one of: lctrl, rctrl, lalt, ralt, lsuper, rsuper)",
+                 (int) key_len, item);
             return 0;
         }
 #undef STREQ
