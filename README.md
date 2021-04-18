@@ -44,7 +44,10 @@ control it using keyboard and mouse.
  - Windows: [download][direct-win64]
  - macOS: `brew install scrcpy`
 
-Build from sources: [BUILD]
+Build from sources: [BUILD] ([simplified process][BUILD_simple])
+
+[BUILD]: BUILD.md
+[BUILD_simple]: BUILD.md#simple
 
 
 ### Linux
@@ -76,9 +79,8 @@ For Gentoo, an [Ebuild] is available: [`scrcpy/`][ebuild-link].
 [Ebuild]: https://wiki.gentoo.org/wiki/Ebuild
 [ebuild-link]: https://github.com/maggu2810/maggu2810-overlay/tree/master/app-mobilephone/scrcpy
 
-You could also [build the app manually][BUILD] (don't worry, it's not that
-hard).
-
+You could also [build the app manually][BUILD] ([simplified
+process][BUILD_simple]).
 
 
 ### Windows
@@ -125,11 +127,7 @@ brew install scrcpy
 You need `adb`, accessible from your `PATH`. If you don't have it yet:
 
 ```bash
-# Homebrew >= 2.6.0
-brew install --cask android-platform-tools
-
-# Homebrew < 2.6.0
-brew cask install android-platform-tools
+brew install android-platform-tools
 ```
 
 You can also [build the app manually][BUILD].
@@ -667,7 +665,7 @@ There is no visual feedback, a log is printed to the console.
 The target directory can be changed on start:
 
 ```bash
-scrcpy --push-target /sdcard/foo/bar/
+scrcpy --push-target=/sdcard/Download/
 ```
 
 
@@ -763,8 +761,6 @@ A colleague challenged me to find a name as unpronounceable as [gnirehtet].
 
 See [BUILD].
 
-[BUILD]: BUILD.md
-
 
 ## Common issues
 
@@ -808,6 +804,7 @@ Read the [developers page].
 This README is available in other languages:
 
 - [Indonesian (Indonesia, `id`) - v1.16](README.id.md)
+- [日本語 (Japanese, `jp`) - v1.17](README.jp.md)
 - [한국어 (Korean, `ko`) - v1.11](README.ko.md)
 - [português brasileiro (Brazilian Portuguese, `pt-BR`) - v1.17](README.pt-br.md)
 - [简体中文 (Simplified Chinese, `zh-Hans`) - v1.17](README.zh-Hans.md)
