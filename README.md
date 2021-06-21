@@ -1,4 +1,4 @@
-# scrcpy (v1.17)
+# scrcpy (v1.18)
 
 [Read in another language](#translations)
 
@@ -88,10 +88,10 @@ process][BUILD_simple]).
 For Windows, for simplicity, a prebuilt archive with all the dependencies
 (including `adb`) is available:
 
- - [`scrcpy-win64-v1.17.zip`][direct-win64]  
-   _(SHA-256: 8b9e57993c707367ed10ebfe0e1ef563c7a29d9af4a355cd8b6a52a317c73eea)_
+ - [`scrcpy-win64-v1.18.zip`][direct-win64]  
+   _(SHA-256: 37212f5087fe6f3e258f1d44fa5c02207496b30e1d7ec442cbcf8358910a5c63)_
 
-[direct-win64]: https://github.com/Genymobile/scrcpy/releases/download/v1.17/scrcpy-win64-v1.17.zip
+[direct-win64]: https://github.com/Genymobile/scrcpy/releases/download/v1.18/scrcpy-win64-v1.18.zip
 
 It is also available in [Chocolatey]:
 
@@ -214,10 +214,11 @@ If `--max-size` is also specified, resizing is applied after cropping.
 To lock the orientation of the mirroring:
 
 ```bash
-scrcpy --lock-video-orientation 0   # natural orientation
-scrcpy --lock-video-orientation 1   # 90° counterclockwise
-scrcpy --lock-video-orientation 2   # 180°
-scrcpy --lock-video-orientation 3   # 90° clockwise
+scrcpy --lock-video-orientation     # initial (current) orientation
+scrcpy --lock-video-orientation=0   # natural orientation
+scrcpy --lock-video-orientation=1   # 90° counterclockwise
+scrcpy --lock-video-orientation=2   # 180°
+scrcpy --lock-video-orientation=3   # 90° clockwise
 ```
 
 This affects recording orientation.
@@ -241,7 +242,9 @@ error will give the available encoders:
 scrcpy --encoder _
 ```
 
-### Recording
+### Capture
+
+#### Recording
 
 It is possible to record the screen while mirroring:
 
@@ -263,6 +266,59 @@ performance reasons). Frames are _timestamped_ on the device, so [packet delay
 variation] does not impact the recorded file.
 
 [packet delay variation]: https://en.wikipedia.org/wiki/Packet_delay_variation
+
+
+#### v4l2loopback
+
+On Linux, it is possible to send the video stream to a v4l2 loopback device, so
+that the Android device can be opened like a webcam by any v4l2-capable tool.
+
+The module `v4l2loopback` must be installed:
+
+```bash
+sudo apt install v4l2loopback-dkms
+```
+
+To create a v4l2 device:
+
+```bash
+sudo modprobe v4l2loopback
+```
+
+This will create a new video device in `/dev/videoN`, where `N` is an integer
+(more [options](https://github.com/umlaeute/v4l2loopback#options) are available
+to create several devices or devices with specific IDs).
+
+To list the enabled devices:
+
+```bash
+# requires v4l-utils package
+v4l2-ctl --list-devices
+
+# simple but might be sufficient
+ls /dev/video*
+```
+
+To start scrcpy using a v4l2 sink:
+
+```bash
+scrcpy --v4l2-sink=/dev/videoN
+scrcpy --v4l2-sink=/dev/videoN --no-display  # disable mirroring window
+scrcpy --v4l2-sink=/dev/videoN -N            # short version
+```
+
+(replace `N` by the device ID, check with `ls /dev/video*`)
+
+Once enabled, you can open your video stream with a v4l2-capable tool:
+
+```bash
+ffplay -i /dev/videoN
+vlc v4l2:///dev/videoN   # VLC might add some buffering delay
+```
+
+For example, you could capture the video within [OBS].
+
+[OBS]: https://obsproject.com/fr
 
 
 ### Connection
@@ -507,18 +563,6 @@ scrcpy -Sw
 ```
 
 
-#### Render expired frames
-
-By default, to minimize latency, _scrcpy_ always renders the last decoded frame
-available, and drops any previous one.
-
-To force the rendering of all frames (at a cost of a possible increased
-latency), use:
-
-```bash
-scrcpy --render-expired-frames
-```
-
 #### Show touches
 
 For presentations, it may be useful to show physical touches (on the physical
@@ -666,15 +710,15 @@ There is no visual feedback, a log is printed to the console.
 
 #### Push file to device
 
-To push a file to `/sdcard/` on the device, drag & drop a (non-APK) file to the
-_scrcpy_ window.
+To push a file to `/sdcard/Download/` on the device, drag & drop a (non-APK)
+file to the _scrcpy_ window.
 
 There is no visual feedback, a log is printed to the console.
 
 The target directory can be changed on start:
 
 ```bash
-scrcpy --push-target=/sdcard/Download/
+scrcpy --push-target=/sdcard/Movies/
 ```
 
 
@@ -714,10 +758,10 @@ _<kbd>[Super]</kbd> is typically the <kbd>Windows</kbd> or <kbd>Cmd</kbd> key._
  | Rotate display left                         | <kbd>MOD</kbd>+<kbd>←</kbd> _(left)_
  | Rotate display right                        | <kbd>MOD</kbd>+<kbd>→</kbd> _(right)_
  | Resize window to 1:1 (pixel-perfect)        | <kbd>MOD</kbd>+<kbd>g</kbd>
- | Resize window to remove black borders       | <kbd>MOD</kbd>+<kbd>w</kbd> \| _Double-click¹_
+ | Resize window to remove black borders       | <kbd>MOD</kbd>+<kbd>w</kbd> \| _Double-left-click¹_
  | Click on `HOME`                             | <kbd>MOD</kbd>+<kbd>h</kbd> \| _Middle-click_
  | Click on `BACK`                             | <kbd>MOD</kbd>+<kbd>b</kbd> \| _Right-click²_
- | Click on `APP_SWITCH`                       | <kbd>MOD</kbd>+<kbd>s</kbd>
+ | Click on `APP_SWITCH`                       | <kbd>MOD</kbd>+<kbd>s</kbd> \| _4th-click³_
  | Click on `MENU` (unlock screen)             | <kbd>MOD</kbd>+<kbd>m</kbd>
  | Click on `VOLUME_UP`                        | <kbd>MOD</kbd>+<kbd>↑</kbd> _(up)_
  | Click on `VOLUME_DOWN`                      | <kbd>MOD</kbd>+<kbd>↓</kbd> _(down)_
@@ -726,18 +770,27 @@ _<kbd>[Super]</kbd> is typically the <kbd>Windows</kbd> or <kbd>Cmd</kbd> key._
  | Turn device screen off (keep mirroring)     | <kbd>MOD</kbd>+<kbd>o</kbd>
  | Turn device screen on                       | <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>o</kbd>
  | Rotate device screen                        | <kbd>MOD</kbd>+<kbd>r</kbd>
- | Expand notification panel                   | <kbd>MOD</kbd>+<kbd>n</kbd>
- | Collapse notification panel                 | <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>n</kbd>
- | Copy to clipboard³                          | <kbd>MOD</kbd>+<kbd>c</kbd>
- | Cut to clipboard³                           | <kbd>MOD</kbd>+<kbd>x</kbd>
- | Synchronize clipboards and paste³           | <kbd>MOD</kbd>+<kbd>v</kbd>
+ | Expand notification panel                   | <kbd>MOD</kbd>+<kbd>n</kbd> \| _5th-click³_
+ | Expand settings panel                       |  <kbd>MOD</kbd>+<kbd>n</kbd>+<kbd>n</kbd> \| _Double-5th-click³_
+ | Collapse panels                             | <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>n</kbd>
+ | Copy to clipboard⁴                          | <kbd>MOD</kbd>+<kbd>c</kbd>
+ | Cut to clipboard⁴                           | <kbd>MOD</kbd>+<kbd>x</kbd>
+ | Synchronize clipboards and paste⁴           | <kbd>MOD</kbd>+<kbd>v</kbd>
  | Inject computer clipboard text              | <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>v</kbd>
  | Enable/disable FPS counter (on stdout)      | <kbd>MOD</kbd>+<kbd>i</kbd>
  | Pinch-to-zoom                               | <kbd>Ctrl</kbd>+_click-and-move_
 
 _¹Double-click on black borders to remove them._  
 _²Right-click turns the screen on if it was off, presses BACK otherwise._  
-_³Only on Android >= 7._
+_³4th and 5th mouse buttons, if your mouse has them._  
+_⁴Only on Android >= 7._
+
+Shortcuts with repeated keys are executted by releasing and pressing the key a
+second time. For example, to execute "Expand settings panel":
+
+ 1. Press and keep pressing <kbd>MOD</kbd>.
+ 2. Then double-press <kbd>n</kbd>.
+ 3. Finally, release <kbd>MOD</kbd>.
 
 All <kbd>Ctrl</kbd>+_key_ shortcuts are forwarded to the device, so they are
 handled by the active application.

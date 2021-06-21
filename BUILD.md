@@ -13,8 +13,8 @@ First, you need to install the required packages:
 ```bash
 # for Debian/Ubuntu
 sudo apt install ffmpeg libsdl2-2.0-0 adb wget \
-                 gcc git pkg-config meson ninja-build \
-                 libavcodec-dev libavformat-dev libavutil-dev libsdl2-dev
+                 gcc git pkg-config meson ninja-build libsdl2-dev \
+                 libavcodec-dev libavdevice-dev libavformat-dev libavutil-dev
 ```
 
 Then clone the repo and execute the installation script
@@ -91,8 +91,8 @@ Install the required packages from your package manager.
 sudo apt install ffmpeg libsdl2-2.0-0 adb
 
 # client build dependencies
-sudo apt install gcc git pkg-config meson ninja-build \
-                 libavcodec-dev libavformat-dev libavutil-dev libsdl2-dev
+sudo apt install gcc git pkg-config meson ninja-build libsdl2-dev \
+                 libavcodec-dev libavdevice-dev libavformat-dev libavutil-dev
 
 # server build dependencies
 sudo apt install openjdk-11-jdk
@@ -268,10 +268,10 @@ install` must be run as root)._
 
 #### Option 2: Use prebuilt server
 
- - [`scrcpy-server-v1.17`][direct-scrcpy-server]  
-   _(SHA-256: 11b5ad2d1bc9b9730fb7254a78efd71a8ff46b1938ff468e47a21b653a1b6725)_
+ - [`scrcpy-server-v1.18`][direct-scrcpy-server]  
+   _(SHA-256: 641c5c6beda9399dfae72d116f5ff43b5ed1059d871c9ebc3f47610fd33c51a3)_
 
-[direct-scrcpy-server]: https://github.com/Genymobile/scrcpy/releases/download/v1.17/scrcpy-server-v1.17
+[direct-scrcpy-server]: https://github.com/Genymobile/scrcpy/releases/download/v1.18/scrcpy-server-v1.18
 
 Download the prebuilt server somewhere, and specify its path during the Meson
 configuration:
