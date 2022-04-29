@@ -1,4 +1,4 @@
-# scrcpy (v1.23)
+# scrcpy (v1.24)
 
 <img src="app/data/icon.svg" width="128" height="128" alt="scrcpy" align="right" />
 
@@ -106,10 +106,10 @@ process][BUILD_simple]).
 For Windows, a prebuilt archive with all the dependencies (including `adb`) is
 available:
 
- - [`scrcpy-win64-v1.23.zip`][direct-win64]  
-   _(SHA-256: d2f601b1d0157faf65153d8a093d827fd65aec5d5842d677ac86fb2b5b7704cc)_
+ - [`scrcpy-win64-v1.24.zip`][direct-win64]  
+   <sub>SHA-256: `6ccb64cba0a3e75715e85a188daeb4f306a1985f8ce123eba92ba74fc9b27367`</sub>
 
-[direct-win64]: https://github.com/Genymobile/scrcpy/releases/download/v1.23/scrcpy-win64-v1.23.zip
+[direct-win64]: https://github.com/Genymobile/scrcpy/releases/download/v1.24/scrcpy-win64-v1.24.zip
 
 It is also available in [Chocolatey]:
 
@@ -447,6 +447,9 @@ scrcpy --serial 0123456789abcdef
 scrcpy -s 0123456789abcdef  # short version
 ```
 
+The serial may also be provided via the environment variable `ANDROID_SERIAL`
+(also used by `adb`).
+
 If the device is connected over TCP/IP:
 
 ```bash
@@ -717,6 +720,16 @@ To turn the device screen off when closing _scrcpy_:
 
 ```bash
 scrcpy --power-off-on-close
+```
+
+#### Power on on start
+
+By default, on start, the device is powered on.
+
+To prevent this behavior:
+
+```bash
+scrcpy --no-power-on
 ```
 
 
