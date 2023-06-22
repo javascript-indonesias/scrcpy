@@ -14,6 +14,7 @@ src = [
     'src/delay_buffer.c',
     'src/demuxer.c',
     'src/device_msg.c',
+    'src/display.c',
     'src/icon.c',
     'src/file_pusher.c',
     'src/fps_counter.c',
@@ -50,6 +51,7 @@ src = [
     'src/util/term.c',
     'src/util/thread.c',
     'src/util/tick.c',
+    'src/util/timeout.c',
 ]
 
 conf = configuration_data()
@@ -277,10 +279,6 @@ if get_option('buildtype') == 'debug'
             'src/util/strbuf.c',
             'src/util/term.c',
         ]],
-        ['test_clock', [
-            'tests/test_clock.c',
-            'src/clock.c',
-        ]],
         ['test_control_msg_serialize', [
             'tests/test_control_msg_serialize.c',
             'src/control_msg.c',
@@ -310,7 +308,8 @@ if get_option('buildtype') == 'debug'
     ]
 
     foreach t : tests
-        exe = executable(t[0], t[1],
+        sources = t[1] + ['src/compat.c']
+        exe = executable(t[0], sources,
                          include_directories: src_dir,
                          dependencies: dependencies,
                          c_args: ['-DSDL_MAIN_HANDLED', '-DSC_TEST'])

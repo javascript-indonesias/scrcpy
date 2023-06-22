@@ -226,12 +226,16 @@ execute_server(struct sc_server *server,
     ADD_PARAM("scid=%08x", params->scid);
     ADD_PARAM("log_level=%s", log_level_to_server_string(params->log_level));
 
+    if (!params->video) {
+        ADD_PARAM("video=false");
+    }
     if (params->video_bit_rate) {
         ADD_PARAM("video_bit_rate=%" PRIu32, params->video_bit_rate);
     }
     if (!params->audio) {
         ADD_PARAM("audio=false");
-    } else if (params->audio_bit_rate) {
+    }
+    if (params->audio_bit_rate) {
         ADD_PARAM("audio_bit_rate=%" PRIu32, params->audio_bit_rate);
     }
     if (params->video_codec != SC_CODEC_H264) {
@@ -241,6 +245,10 @@ execute_server(struct sc_server *server,
     if (params->audio_codec != SC_CODEC_OPUS) {
         ADD_PARAM("audio_codec=%s",
             sc_server_get_codec_name(params->audio_codec));
+    }
+    if (params->audio_source != SC_AUDIO_SOURCE_OUTPUT) {
+        assert(params->audio_source == SC_AUDIO_SOURCE_MIC);
+        ADD_PARAM("audio_source=mic");
     }
     if (params->max_size) {
         ADD_PARAM("max_size=%" PRIu16, params->max_size);
@@ -463,6 +471,7 @@ sc_server_connect_to(struct sc_server *server, struct sc_server_info *info) {
     const char *serial = server->serial;
     assert(serial);
 
+    bool video = server->params.video;
     bool audio = server->params.audio;
     bool control = server->params.control;
 
@@ -470,9 +479,12 @@ sc_server_connect_to(struct sc_server *server, struct sc_server_info *info) {
     sc_socket audio_socket = SC_SOCKET_NONE;
     sc_socket control_socket = SC_SOCKET_NONE;
     if (!tunnel->forward) {
-        video_socket = net_accept_intr(&server->intr, tunnel->server_socket);
-        if (video_socket == SC_SOCKET_NONE) {
-            goto fail;
+        if (video) {
+            video_socket =
+                net_accept_intr(&server->intr, tunnel->server_socket);
+            if (video_socket == SC_SOCKET_NONE) {
+                goto fail;
+            }
         }
 
         if (audio) {
@@ -503,35 +515,45 @@ sc_server_connect_to(struct sc_server *server, struct sc_server_info *info) {
 
         unsigned attempts = 100;
         sc_tick delay = SC_TICK_FROM_MS(100);
-        video_socket = connect_to_server(server, attempts, delay, tunnel_host,
-                                         tunnel_port);
-        if (video_socket == SC_SOCKET_NONE) {
+        sc_socket first_socket = connect_to_server(server, attempts, delay,
+                                                   tunnel_host, tunnel_port);
+        if (first_socket == SC_SOCKET_NONE) {
             goto fail;
         }
 
+        if (video) {
+            video_socket = first_socket;
+        }
+
         if (audio) {
-            audio_socket = net_socket();
-            if (audio_socket == SC_SOCKET_NONE) {
-                goto fail;
-            }
-            bool ok = net_connect_intr(&server->intr, audio_socket, tunnel_host,
-                                       tunnel_port);
-            if (!ok) {
-                goto fail;
+            if (!video) {
+                audio_socket = first_socket;
+            } else {
+                audio_socket = net_socket();
+                if (audio_socket == SC_SOCKET_NONE) {
+                    goto fail;
+                }
+                bool ok = net_connect_intr(&server->intr, audio_socket,
+                                           tunnel_host, tunnel_port);
+                if (!ok) {
+                    goto fail;
+                }
             }
         }
 
         if (control) {
-            // we know that the device is listening, we don't need several
-            // attempts
-            control_socket = net_socket();
-            if (control_socket == SC_SOCKET_NONE) {
-                goto fail;
-            }
-            bool ok = net_connect_intr(&server->intr, control_socket,
-                                       tunnel_host, tunnel_port);
-            if (!ok) {
-                goto fail;
+            if (!video && !audio) {
+                control_socket = first_socket;
+            } else {
+                control_socket = net_socket();
+                if (control_socket == SC_SOCKET_NONE) {
+                    goto fail;
+                }
+                bool ok = net_connect_intr(&server->intr, control_socket,
+                                           tunnel_host, tunnel_port);
+                if (!ok) {
+                    goto fail;
+                }
             }
         }
     }
@@ -540,13 +562,17 @@ sc_server_connect_to(struct sc_server *server, struct sc_server_info *info) {
     sc_adb_tunnel_close(tunnel, &server->intr, serial,
                         server->device_socket_name);
 
+    sc_socket first_socket = video ? video_socket
+                           : audio ? audio_socket
+                                   : control_socket;
+
     // The sockets will be closed on stop if device_read_info() fails
-    bool ok = device_read_info(&server->intr, video_socket, info);
+    bool ok = device_read_info(&server->intr, first_socket, info);
     if (!ok) {
         goto fail;
     }
 
-    assert(video_socket != SC_SOCKET_NONE);
+    assert(!video || video_socket != SC_SOCKET_NONE);
     assert(!audio || audio_socket != SC_SOCKET_NONE);
     assert(!control || control_socket != SC_SOCKET_NONE);
 
@@ -768,6 +794,15 @@ sc_server_configure_tcpip_unknown_address(struct sc_server *server,
     return sc_server_connect_to_tcpip(server, ip_port);
 }
 
+static void
+sc_server_kill_adb_if_requested(struct sc_server *server) {
+    if (server->params.kill_adb_on_close) {
+        LOGI("Killing adb server...");
+        unsigned flags = SC_ADB_NO_STDOUT | SC_ADB_NO_STDERR | SC_ADB_NO_LOGERR;
+        sc_adb_kill_server(&server->intr, flags);
+    }
+}
+
 static int
 run_server(void *data) {
     struct sc_server *server = data;
@@ -779,7 +814,7 @@ run_server(void *data) {
     // is parsed, so it is not output)
     bool ok = sc_adb_start_server(&server->intr, 0);
     if (!ok) {
-        LOGE("Could not start adb daemon");
+        LOGE("Could not start adb server");
         goto error_connection_failed;
     }
 
@@ -930,8 +965,11 @@ run_server(void *data) {
     sc_mutex_unlock(&server->mutex);
 
     // Interrupt sockets to wake up socket blocking calls on the server
-    assert(server->video_socket != SC_SOCKET_NONE);
-    net_interrupt(server->video_socket);
+
+    if (server->video_socket != SC_SOCKET_NONE) {
+        // There is no video_socket if --no-video is set
+        net_interrupt(server->video_socket);
+    }
 
     if (server->audio_socket != SC_SOCKET_NONE) {
         // There is no audio_socket if --no-audio is set
@@ -964,9 +1002,12 @@ run_server(void *data) {
 
     sc_process_close(pid);
 
+    sc_server_kill_adb_if_requested(server);
+
     return 0;
 
 error_connection_failed:
+    sc_server_kill_adb_if_requested(server);
     server->cbs->on_connection_failed(server, server->cbs_userdata);
     return -1;
 }

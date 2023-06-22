@@ -10,7 +10,6 @@ import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.AudioTimestamp;
 import android.media.MediaCodec;
-import android.media.MediaRecorder;
 import android.os.Build;
 import android.os.SystemClock;
 
@@ -21,8 +20,11 @@ public final class AudioCapture {
     public static final int SAMPLE_RATE = 48000;
     public static final int CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_STEREO;
     public static final int CHANNELS = 2;
-    public static final int FORMAT = AudioFormat.ENCODING_PCM_16BIT;
+    public static final int CHANNEL_MASK = AudioFormat.CHANNEL_IN_LEFT | AudioFormat.CHANNEL_IN_RIGHT;
+    public static final int ENCODING = AudioFormat.ENCODING_PCM_16BIT;
     public static final int BYTES_PER_SAMPLE = 2;
+
+    private final int audioSource;
 
     private AudioRecord recorder;
 
@@ -30,13 +32,17 @@ public final class AudioCapture {
     private long previousPts = 0;
     private long nextPts = 0;
 
+    public AudioCapture(AudioSource audioSource) {
+        this.audioSource = audioSource.value();
+    }
+
     public static int millisToBytes(int millis) {
         return SAMPLE_RATE * CHANNELS * BYTES_PER_SAMPLE * millis / 1000;
     }
 
     private static AudioFormat createAudioFormat() {
         AudioFormat.Builder builder = new AudioFormat.Builder();
-        builder.setEncoding(FORMAT);
+        builder.setEncoding(ENCODING);
         builder.setSampleRate(SAMPLE_RATE);
         builder.setChannelMask(CHANNEL_CONFIG);
         return builder.build();
@@ -44,60 +50,80 @@ public final class AudioCapture {
 
     @TargetApi(Build.VERSION_CODES.M)
     @SuppressLint({"WrongConstant", "MissingPermission"})
-    private static AudioRecord createAudioRecord() {
+    private static AudioRecord createAudioRecord(int audioSource) {
         AudioRecord.Builder builder = new AudioRecord.Builder();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             // On older APIs, Workarounds.fillAppInfo() must be called beforehand
             builder.setContext(FakeContext.get());
         }
-        builder.setAudioSource(MediaRecorder.AudioSource.REMOTE_SUBMIX);
+        builder.setAudioSource(audioSource);
         builder.setAudioFormat(createAudioFormat());
-        int minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, FORMAT);
+        int minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, ENCODING);
         // This buffer size does not impact latency
         builder.setBufferSizeInBytes(8 * minBufferSize);
         return builder.build();
     }
 
     private static void startWorkaroundAndroid11() {
-        if (Build.VERSION.SDK_INT == Build.VERSION_CODES.R) {
-            // Android 11 requires Apps to be at foreground to record audio.
-            // Normally, each App has its own user ID, so Android checks whether the requesting App has the user ID that's at the foreground.
-            // But scrcpy server is NOT an App, it's a Java application started from Android shell, so it has the same user ID (2000) with Android
-            // shell ("com.android.shell").
-            // If there is an Activity from Android shell running at foreground, then the permission system will believe scrcpy is also in the
-            // foreground.
-            if (Build.VERSION.SDK_INT == Build.VERSION_CODES.R) {
-                Intent intent = new Intent(Intent.ACTION_MAIN);
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                intent.addCategory(Intent.CATEGORY_LAUNCHER);
-                intent.setComponent(new ComponentName(FakeContext.PACKAGE_NAME, "com.android.shell.HeapDumpActivity"));
-                ServiceManager.getActivityManager().startActivityAsUserWithFeature(intent);
-                // Wait for activity to start
-                SystemClock.sleep(150);
-            }
-        }
+        // Android 11 requires Apps to be at foreground to record audio.
+        // Normally, each App has its own user ID, so Android checks whether the requesting App has the user ID that's at the foreground.
+        // But scrcpy server is NOT an App, it's a Java application started from Android shell, so it has the same user ID (2000) with Android
+        // shell ("com.android.shell").
+        // If there is an Activity from Android shell running at foreground, then the permission system will believe scrcpy is also in the
+        // foreground.
+        Intent intent = new Intent(Intent.ACTION_MAIN);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        intent.addCategory(Intent.CATEGORY_LAUNCHER);
+        intent.setComponent(new ComponentName(FakeContext.PACKAGE_NAME, "com.android.shell.HeapDumpActivity"));
+        ServiceManager.getActivityManager().startActivityAsUserWithFeature(intent);
     }
 
     private static void stopWorkaroundAndroid11() {
-        if (Build.VERSION.SDK_INT == Build.VERSION_CODES.R) {
-            ServiceManager.getActivityManager().forceStopPackage(FakeContext.PACKAGE_NAME);
+        ServiceManager.getActivityManager().forceStopPackage(FakeContext.PACKAGE_NAME);
+    }
+
+    private void tryStartRecording(int attempts, int delayMs) throws AudioCaptureForegroundException {
+        while (attempts-- > 0) {
+            // Wait for activity to start
+            SystemClock.sleep(delayMs);
+            try {
+                startRecording();
+                return; // it worked
+            } catch (UnsupportedOperationException e) {
+                if (attempts == 0) {
+                    Ln.e("Failed to start audio capture");
+                    Ln.e("On Android 11, audio capture must be started in the foreground, make sure that the device is unlocked when starting "
+                            + "scrcpy.");
+                    throw new AudioCaptureForegroundException();
+                } else {
+                    Ln.d("Failed to start audio capture, retrying...");
+                }
+            }
         }
     }
 
-    public void start() throws AudioCaptureForegroundException {
-        startWorkaroundAndroid11();
+    private void startRecording() {
         try {
-            recorder = createAudioRecord();
-            recorder.startRecording();
-        } catch (UnsupportedOperationException e) {
-            if (Build.VERSION.SDK_INT == Build.VERSION_CODES.R) {
-                Ln.e("Failed to start audio capture");
-                Ln.e("On Android 11, it is only possible to capture in foreground, make sure that the device is unlocked when starting scrcpy.");
-                throw new AudioCaptureForegroundException();
+            recorder = createAudioRecord(audioSource);
+        } catch (NullPointerException e) {
+            // Creating an AudioRecord using an AudioRecord.Builder does not work on Vivo phones:
+            // - <https://github.com/Genymobile/scrcpy/issues/3805>
+            // - <https://github.com/Genymobile/scrcpy/pull/3862>
+            recorder = Workarounds.createAudioRecord(audioSource, SAMPLE_RATE, CHANNEL_CONFIG, CHANNELS, CHANNEL_MASK, ENCODING);
+        }
+        recorder.startRecording();
+    }
+
+    public void start() throws AudioCaptureForegroundException {
+        if (Build.VERSION.SDK_INT == Build.VERSION_CODES.R) {
+            startWorkaroundAndroid11();
+            try {
+                tryStartRecording(3, 100);
+            } finally {
+                stopWorkaroundAndroid11();
             }
-            throw e;
-        } finally {
-            stopWorkaroundAndroid11();
+        } else {
+            startRecording();
         }
     }
 
@@ -111,7 +137,7 @@ public final class AudioCapture {
     @TargetApi(Build.VERSION_CODES.N)
     public int read(ByteBuffer directBuffer, int size, MediaCodec.BufferInfo outBufferInfo) {
         int r = recorder.read(directBuffer, size);
-        if (r < 0) {
+        if (r <= 0) {
             return r;
         }
 

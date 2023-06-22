@@ -33,7 +33,12 @@ sc_demuxer_to_avcodec_id(uint32_t codec_id) {
         case SC_CODEC_ID_H265:
             return AV_CODEC_ID_HEVC;
         case SC_CODEC_ID_AV1:
+#ifdef SCRCPY_LAVC_HAS_AV1
             return AV_CODEC_ID_AV1;
+#else
+            LOGE("AV1 not supported by this FFmpeg version");
+            return AV_CODEC_ID_NONE;
+#endif
         case SC_CODEC_ID_OPUS:
             return AV_CODEC_ID_OPUS;
         case SC_CODEC_ID_AAC:
@@ -74,9 +79,8 @@ sc_demuxer_recv_video_size(struct sc_demuxer *demuxer, uint32_t *width,
 
 static bool
 sc_demuxer_recv_packet(struct sc_demuxer *demuxer, AVPacket *packet) {
-    // The video stream contains raw packets, without time information. When we
-    // record, we retrieve the timestamps separately, from a "meta" header
-    // added by the server before each raw packet.
+    // The video and audio streams contain a sequence of raw packets (as
+    // provided by MediaCodec), each prefixed with a "meta" header.
     //
     // The "meta" header length is 12 bytes:
     // [. . . . . . . .|. . . .]. . . . . . . . . . . . . . . ...

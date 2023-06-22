@@ -56,6 +56,20 @@ Use a specific MediaCodec audio encoder (depending on the codec provided by \fB\
 The available encoders can be listed by \-\-list\-encoders.
 
 .TP
+.BI "\-\-audio\-source " source
+Select the audio source (output or mic).
+
+Default is output.
+
+.TP
+.BI "\-\-audio\-output\-buffer ms
+Configure the size of the SDL audio output buffer (in milliseconds).
+
+If you get "robotic" audio playback, you should test with a higher value (10). Do not change this setting otherwise.
+
+Default is 5.
+
+.TP
 .BI "\-b, \-\-video\-bit\-rate " value
 Encode the video at the given bit rate, expressed in bits/s. Unit suffixes are supported: '\fBK\fR' (x1000) and '\fBM\fR' (x1000000).
 
@@ -100,6 +114,10 @@ Use TCP/IP device (if there is exactly one, like adb -e).
 Also see \fB\-d\fR (\fB\-\-select\-usb\fR).
 
 .TP
+.B \-f, \-\-fullscreen
+Start in fullscreen.
+
+.TP
 .B \-\-force\-adb\-forward
 Do not attempt to use "adb reverse" to connect to the device.
 
@@ -108,12 +126,12 @@ Do not attempt to use "adb reverse" to connect to the device.
 By default, right-click triggers BACK (or POWER on) and middle-click triggers HOME. This option disables these shortcuts and forward the clicks to the device instead.
 
 .TP
-.B \-f, \-\-fullscreen
-Start in fullscreen.
-
-.TP
 .B \-h, \-\-help
 Print this help.
+
+.TP
+.B \-\-kill\-adb\-on\-close
+Kill adb when scrcpy terminates.
 
 .TP
 .B \-K, \-\-hid\-keyboard
@@ -154,10 +172,6 @@ Default is "unlocked".
 Passing the option without argument is equivalent to passing "initial".
 
 .TP
-.BI "\-\-max\-fps " value
-Limit the framerate of screen capture (officially supported since Android 10, but may work on earlier versions).
-
-.TP
 .BI "\-m, \-\-max\-size " value
 Limit both the width and height of the video to \fIvalue\fR. The other dimension is computed so that the device aspect\-ratio is preserved.
 
@@ -174,6 +188,26 @@ LAlt, LSuper or RSuper toggle the capture mode, to give control of the mouse bac
 It may only work over USB.
 
 Also see \fB\-\-hid\-keyboard\fR.
+
+.TP
+.BI "\-\-max\-fps " value
+Limit the framerate of screen capture (officially supported since Android 10, but may work on earlier versions).
+
+.TP
+.B \-n, \-\-no\-control
+Disable device control (mirror the device in read\-only).
+
+.TP
+.B \-N, \-\-no\-playback
+Disable video and audio playback on the computer (equivalent to --no-video-playback --no-audio-playback).
+
+.TP
+.B \-\-no\-audio
+Disable audio forwarding.
+
+.TP
+.B \-\-no\-audio\-playback
+Disable audio playback on the computer.
 
 .TP
 .B \-\-no\-cleanup
@@ -194,14 +228,6 @@ By default, on MediaCodec error, scrcpy automatically tries again with a lower d
 This option disables this behavior.
 
 .TP
-.B \-n, \-\-no\-control
-Disable device control (mirror the device in read\-only).
-
-.TP
-.B \-N, \-\-no\-display
-Do not display device (only when screen recording is enabled).
-
-.TP
 .B \-\-no\-key\-repeat
 Do not forward repeated key events when a key is held down.
 
@@ -212,6 +238,14 @@ If the renderer is OpenGL 3.0+ or OpenGL ES 2.0+, then mipmaps are automatically
 .TP
 .B \-\-no\-power\-on
 Do not power on the device on start.
+
+.TP
+.B \-\-no\-video
+Disable video forwarding.
+
+.TP
+.B \-\-no\-video\-playback
+Disable video playback on the computer.
 
 .TP
 .B \-\-otg
@@ -255,10 +289,6 @@ Set the target directory for pushing files to the device by drag & drop. It is p
 Default is "/sdcard/Download/".
 
 .TP
-.B \-\-raw\-key\-events
-Inject key events for all input keys, and ignore text events.
-
-.TP
 .BI "\-r, \-\-record " file
 Record screen to
 .IR file .
@@ -266,6 +296,10 @@ Record screen to
 The format is determined by the
 .B \-\-record\-format
 option if set, or by the file extension (.mp4 or .mkv).
+
+.TP
+.B \-\-raw\-key\-events
+Inject key events for all input keys, and ignore text events.
 
 .TP
 .BI "\-\-record\-format " format
@@ -293,6 +327,10 @@ Set the initial display rotation. Possibles values are 0, 1, 2 and 3. Each incre
 The device serial number. Mandatory only if several devices are connected to adb.
 
 .TP
+.B \-S, \-\-turn\-screen\-off
+Turn the device screen off immediately.
+
+.TP
 .BI "\-\-shortcut\-mod " key\fR[+...]][,...]
 Specify the modifiers to use for scrcpy shortcuts. Possible keys are "lctrl", "rctrl", "lalt", "ralt", "lsuper" and "rsuper".
 
@@ -303,6 +341,12 @@ For example, to use either LCtrl+LAlt or LSuper for scrcpy shortcuts, pass "lctr
 Default is "lalt,lsuper" (left-Alt or left-Super).
 
 .TP
+.B \-t, \-\-show\-touches
+Enable "show touches" on start, restore the initial value on exit.
+
+It only shows physical touches (not clicks from scrcpy).
+
+.TP
 .BI "\-\-tcpip\fR[=\fIip\fR[:\fIport\fR]]
 Configure and reconnect the device over TCP/IP.
 
@@ -311,14 +355,8 @@ If a destination address is provided, then scrcpy connects to this address befor
 If no destination address is provided, then scrcpy attempts to find the IP address and adb port of the current device (typically connected over USB), enables TCP/IP mode if necessary, then connects to this address before starting.
 
 .TP
-.B \-S, \-\-turn\-screen\-off
-Turn the device screen off immediately.
-
-.TP
-.B \-t, \-\-show\-touches
-Enable "show touches" on start, restore the initial value on exit.
-
-It only shows physical touches (not clicks from scrcpy).
+.BI "\-\-time\-limit " seconds
+Set the maximum mirroring time, in seconds.
 
 .TP
 .BI "\-\-tunnel\-host " ip
@@ -333,6 +371,16 @@ Set the TCP port of the adb tunnel to reach the scrcpy server. This option autom
 Default is 0 (not forced): the local port used for establishing the tunnel will be used.
 
 .TP
+.B \-v, \-\-version
+Print the version of scrcpy.
+
+.TP
+.BI "\-V, \-\-verbosity " value
+Set the log level ("verbose", "debug", "info", "warn" or "error").
+
+Default is "info" for release builds, "debug" for debug builds.
+
+.TP
 .BI "\-\-v4l2-sink " /dev/videoN
 Output to v4l2loopback device.
 
@@ -345,16 +393,6 @@ Add a buffering delay (in milliseconds) before pushing frames. This increases la
 This option is similar to \fB\-\-display\-buffer\fR, but specific to V4L2 sink.
 
 Default is 0 (no buffering).
-
-.TP
-.BI "\-V, \-\-verbosity " value
-Set the log level ("verbose", "debug", "info", "warn" or "error").
-
-Default is "info" for release builds, "debug" for debug builds.
-
-.TP
-.B \-v, \-\-version
-Print the version of scrcpy.
 
 .TP
 .BI "\-\-video\-codec " name

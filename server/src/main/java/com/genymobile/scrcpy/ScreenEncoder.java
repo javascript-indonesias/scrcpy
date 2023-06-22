@@ -16,7 +16,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class ScreenEncoder implements Device.RotationListener {
+public class ScreenEncoder implements Device.RotationListener, Device.FoldListener, AsyncProcessor {
 
     private static final int DEFAULT_I_FRAME_INTERVAL = 10; // seconds
     private static final int REPEAT_FRAME_DELAY_US = 100_000; // repeat after 100ms
@@ -26,7 +26,7 @@ public class ScreenEncoder implements Device.RotationListener {
     private static final int[] MAX_SIZE_FALLBACK = {2560, 1920, 1600, 1280, 1024, 800};
     private static final int MAX_CONSECUTIVE_ERRORS = 3;
 
-    private final AtomicBoolean rotationChanged = new AtomicBoolean();
+    private final AtomicBoolean resetCapture = new AtomicBoolean();
 
     private final Device device;
     private final Streamer streamer;
@@ -38,6 +38,9 @@ public class ScreenEncoder implements Device.RotationListener {
 
     private boolean firstFrameSent;
     private int consecutiveErrors;
+
+    private Thread thread;
+    private final AtomicBoolean stopped = new AtomicBoolean();
 
     public ScreenEncoder(Device device, Streamer streamer, int videoBitRate, int maxFps, List<CodecOption> codecOptions, String encoderName,
             boolean downsizeOnError) {
@@ -51,20 +54,26 @@ public class ScreenEncoder implements Device.RotationListener {
     }
 
     @Override
+    public void onFoldChanged(int displayId, boolean folded) {
+        resetCapture.set(true);
+    }
+
+    @Override
     public void onRotationChanged(int rotation) {
-        rotationChanged.set(true);
+        resetCapture.set(true);
     }
 
-    public boolean consumeRotationChange() {
-        return rotationChanged.getAndSet(false);
+    private boolean consumeResetCapture() {
+        return resetCapture.getAndSet(false);
     }
 
-    public void streamScreen() throws IOException, ConfigurationException {
+    private void streamScreen() throws IOException, ConfigurationException {
         Codec codec = streamer.getCodec();
         MediaCodec mediaCodec = createMediaCodec(codec, encoderName);
         MediaFormat format = createFormat(codec.getMimeType(), videoBitRate, maxFps, codecOptions);
         IBinder display = createDisplay();
         device.setRotationListener(this);
+        device.setFoldListener(this);
 
         streamer.writeVideoHeader(device.getScreenInfo().getVideoSize());
 
@@ -112,6 +121,7 @@ public class ScreenEncoder implements Device.RotationListener {
         } finally {
             mediaCodec.release();
             device.setRotationListener(null);
+            device.setFoldListener(null);
             SurfaceControl.destroyDisplay(display);
         }
     }
@@ -163,12 +173,17 @@ public class ScreenEncoder implements Device.RotationListener {
 
     private boolean encode(MediaCodec codec, Streamer streamer) throws IOException {
         boolean eof = false;
+        boolean alive = true;
         MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
 
-        while (!consumeRotationChange() && !eof) {
+        while (!consumeResetCapture() && !eof) {
+            if (stopped.get()) {
+                alive = false;
+                break;
+            }
             int outputBufferId = codec.dequeueOutputBuffer(bufferInfo, -1);
             try {
-                if (consumeRotationChange()) {
+                if (consumeResetCapture()) {
                     // must restart encoding with new size
                     break;
                 }
@@ -193,7 +208,7 @@ public class ScreenEncoder implements Device.RotationListener {
             }
         }
 
-        return !eof;
+        return !eof && alive;
     }
 
     private static MediaCodec createMediaCodec(Codec codec, String encoderName) throws IOException, ConfigurationException {
@@ -202,13 +217,22 @@ public class ScreenEncoder implements Device.RotationListener {
             try {
                 return MediaCodec.createByCodecName(encoderName);
             } catch (IllegalArgumentException e) {
-                Ln.e("Encoder '" + encoderName + "' for " + codec.getName() + " not found\n" + LogUtils.buildVideoEncoderListMessage());
+                Ln.e("Video encoder '" + encoderName + "' for " + codec.getName() + " not found\n" + LogUtils.buildVideoEncoderListMessage());
                 throw new ConfigurationException("Unknown encoder: " + encoderName);
+            } catch (IOException e) {
+                Ln.e("Could not create video encoder '" + encoderName + "' for " + codec.getName() + "\n" + LogUtils.buildVideoEncoderListMessage());
+                throw e;
             }
         }
-        MediaCodec mediaCodec = MediaCodec.createEncoderByType(codec.getMimeType());
-        Ln.d("Using encoder: '" + mediaCodec.getName() + "'");
-        return mediaCodec;
+
+        try {
+            MediaCodec mediaCodec = MediaCodec.createEncoderByType(codec.getMimeType());
+            Ln.d("Using video encoder: '" + mediaCodec.getName() + "'");
+            return mediaCodec;
+        } catch (IOException | IllegalArgumentException e) {
+            Ln.e("Could not create default video encoder for " + codec.getName() + "\n" + LogUtils.buildVideoEncoderListMessage());
+            throw e;
+        }
     }
 
     private static MediaFormat createFormat(String videoMimeType, int bitRate, int maxFps, List<CodecOption> codecOptions) {
@@ -256,6 +280,40 @@ public class ScreenEncoder implements Device.RotationListener {
             SurfaceControl.setDisplayLayerStack(display, layerStack);
         } finally {
             SurfaceControl.closeTransaction();
+        }
+    }
+
+    @Override
+    public void start(TerminationListener listener) {
+        thread = new Thread(() -> {
+            try {
+                streamScreen();
+            } catch (ConfigurationException e) {
+                // Do not print stack trace, a user-friendly error-message has already been logged
+            } catch (IOException e) {
+                // Broken pipe is expected on close, because the socket is closed by the client
+                if (!IO.isBrokenPipe(e)) {
+                    Ln.e("Video encoding error", e);
+                }
+            } finally {
+                Ln.d("Screen streaming stopped");
+                listener.onTerminated(true);
+            }
+        }, "video");
+        thread.start();
+    }
+
+    @Override
+    public void stop() {
+        if (thread != null) {
+            stopped.set(true);
+        }
+    }
+
+    @Override
+    public void join() throws InterruptedException {
+        if (thread != null) {
+            thread.join();
         }
     }
 }

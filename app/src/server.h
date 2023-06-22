@@ -26,6 +26,7 @@ struct sc_server_params {
     enum sc_log_level log_level;
     enum sc_codec video_codec;
     enum sc_codec audio_codec;
+    enum sc_audio_source audio_source;
     const char *crop;
     const char *video_codec_options;
     const char *audio_codec_options;
@@ -41,6 +42,7 @@ struct sc_server_params {
     int8_t lock_video_orientation;
     bool control;
     uint32_t display_id;
+    bool video;
     bool audio;
     bool show_touches;
     bool stay_awake;
@@ -56,6 +58,7 @@ struct sc_server_params {
     bool power_on;
     bool list_encoders;
     bool list_displays;
+    bool kill_adb_on_close;
 };
 
 struct sc_server {

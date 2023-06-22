@@ -159,16 +159,37 @@ scrcpy --display-buffer=50 --v4l2-buffer=300
 ```
 
 
-## No display
+## No playback
 
-It is possible to capture an Android device without displaying a mirroring
-window. This option is available if either [recording](recording.md) or
+It is possible to capture an Android device without playing video or audio on
+the computer. This option is useful when [recording](recording.md) or when
 [v4l2](#video4linux) is enabled:
 
 ```bash
-scrcpy --v4l2-sink=/dev/video2 --no-display
-scrcpy --record=file.mkv --no-display
+scrcpy --v4l2-sink=/dev/video2 --no-playback
+scrcpy --record=file.mkv --no-playback
+# interrupt with Ctrl+C
 ```
+
+It is also possible to disable video and audio playback separately:
+
+```bash
+# Send video to V4L2 sink without playing it, but keep audio playback
+scrcpy --v4l2-sink=/dev/video2 --no-video-playback
+
+# Record both video and audio, but only play video
+scrcpy --record=file.mkv --no-audio-playback
+```
+
+
+## No video
+
+To disable video forwarding completely, so that only audio is forwarded:
+
+```
+scrcpy --no-video
+```
+
 
 ## Video4Linux
 
